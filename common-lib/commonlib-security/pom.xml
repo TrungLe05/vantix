@@ -10,6 +10,8 @@
 	</parent>
 	<artifactId>commonlib-security</artifactId>
 	<name>commonlib-security</name>
+	<packaging>jar</packaging>
+
 	<description/>
 	<url/>
 	<licenses>
@@ -31,6 +33,12 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<!-- Cho GatewayHeaderAuthFilter(security) -->
+		<dependency>
+			<groupId>jakarta.servlet</groupId>
+			<artifactId>jakarta.servlet-api</artifactId>
+			<scope>provided</scope>
 		</dependency>
 	</dependencies>
 

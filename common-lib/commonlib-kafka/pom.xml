@@ -10,6 +10,8 @@
 	</parent>
 	<artifactId>commonlib-kafka</artifactId>
 	<name>commonlib-kafka</name>
+	<packaging>jar</packaging>
+
 	<description/>
 	<url/>
 	<licenses>

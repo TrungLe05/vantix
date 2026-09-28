@@ -44,6 +44,14 @@
 
 	<dependencies>
 		<dependency>
+			<groupId>com.dev</groupId>
+			<artifactId>commonlib-jwt</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.dev</groupId>
+			<artifactId>commonlib-api-response</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>

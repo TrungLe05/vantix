@@ -21,6 +21,7 @@
 		<module>common-lib/commonlib-api-response</module>
 		<module>common-lib/commonlib-kafka</module>
 		<module>common-lib/commonlib-security</module>
+		<module>common-lib/commonlib-jwt</module>
 	</modules>
 	<url/>
 	<licenses>
@@ -36,6 +37,8 @@
 		<url/>
 	</scm>
 	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<java.version>21</java.version>
 		<spring-boot.version>4.1.0</spring-boot.version>
 		<spring-cloud.version>2025.1.2</spring-cloud.version>
@@ -43,11 +46,37 @@
 		<jjwt.version>0.12.6</jjwt.version>
 		<springdoc.version>2.6.0</springdoc.version>
 		<ua-parser.version>1.6.1</ua-parser.version>
-
+		<project.version>0.0.1-SNAPSHOT</project.version>
+		<jjwt.version>0.12.6</jjwt.version>
 	</properties>
 
 	<dependencyManagement>
 		<dependencies>
+			<!-- common lib -->
+			<dependency>
+				<groupId>com.dev</groupId>
+				<artifactId>commonlib-api-response</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>com.dev</groupId>
+				<artifactId>commonlib-kafka</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>com.dev</groupId>
+				<artifactId>commonlib-security</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+
+			<dependency>
+				<groupId>com.dev</groupId>
+				<artifactId>commonlib-jwt</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+
 			<dependency>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-dependencies</artifactId>
@@ -107,6 +136,10 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
 		</dependency>
 	</dependencies>
 

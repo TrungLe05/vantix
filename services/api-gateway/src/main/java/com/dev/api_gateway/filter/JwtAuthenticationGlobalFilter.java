@@ -89,6 +89,7 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
         }
 
         builder.header(HEADER_USER_ID, claims.userId()).header(HEADER_USER_ROLE, claims.role());
+        log.debug("HEADER_USER_ID: {}, HEADER_USER_ROLE: {}", claims.userId(), claims.role());
         return chain.filter(exchange.mutate().request(builder.build()).build());
     }
 

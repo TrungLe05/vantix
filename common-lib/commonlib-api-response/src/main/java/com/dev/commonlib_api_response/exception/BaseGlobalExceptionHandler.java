@@ -17,8 +17,8 @@ public abstract class BaseGlobalExceptionHandler {
 
     // 1. Exception nghiệp vụ tự ném ra trong service — nguồn lỗi chính, ưu tiên xử lý trước
     @ExceptionHandler(AppException.class)
-    public ResponseEntity<ApiResponse<Void>> handleAppException(AppException ex) {
-        return buildResponse(ex.getErrorCode(), null);
+    public ResponseEntity<ApiResponse<Object>> handleAppException(AppException ex) {
+        return buildResponse(ex.getErrorCode(), ex.getData());
     }
 
     // 2. Validation @RequestBody (@Valid trên DTO)

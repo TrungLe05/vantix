@@ -23,7 +23,7 @@ spring:
             - id: product-service
               uri: http://localhost:9003
               predicates:
-                - Path=/api/products/**,/api/events/**
+                - Path=/api/products/**,/api/events/**, /api/venues/**, /api/ticket-types/**
 
             - id: order-service
               uri: http://localhost:9001
@@ -69,6 +69,10 @@ app:
       - GET /api/oauth2/authorization/**
       - GET /api/login/oauth2/code/**
       - GET /api/*/health
+      - GET /api/venues
+      - GET /api/events
+      - GET /api/events/*
+      - GET /api/events/*/seat-map
     password-change-allowlist:
       - PATCH /api/auth/change-password
       - POST /api/auth/logout

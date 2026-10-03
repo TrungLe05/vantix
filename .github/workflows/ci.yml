@@ -16,6 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    defaults:
+      run:
+        working-directory: backend
+
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -26,6 +30,7 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+          cache-dependency-path: "backend/**/pom.xml"
 
       - name: Build and run tests
         run: mvn --batch-mode --no-transfer-progress clean verify

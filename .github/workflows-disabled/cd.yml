@@ -1,0 +1,129 @@
+# =====================================================================
+# CD — ĐANG TẮT (chưa có server). File nằm ở .github/workflows-disabled/
+# nên GitHub KHÔNG chạy. Khi có server: chuyển file vào .github/workflows/,
+# bỏ comment, rồi thay các giá trị <...>.
+#
+# Luồng: tag vX.Y.Z -> build image từng service -> push GHCR -> SSH vào VPS
+#        -> docker compose pull && up -d (chờ duyệt thủ công qua Environment).
+#
+# Cần chuẩn bị trước:
+#   1. Mỗi service có Dockerfile (hiện chỉ mới có khung, cần viết trước P9).
+#   2. docker-compose.prod.yml trên server, image trỏ tới ghcr.io/<owner>/vantix-<service>.
+#   3. Settings > Environments > tạo "production", bật Required reviewers.
+#   4. Secrets của environment production: SSH_HOST, SSH_USER, SSH_PRIVATE_KEY.
+# =====================================================================
+
+# name: CD
+#
+# on:
+#   push:
+#     tags: ["v*.*.*"]
+#
+# permissions:
+#   contents: read
+#
+# # Không chạy hai lượt deploy cùng lúc, và không hủy lượt đang chạy dở
+# concurrency:
+#   group: cd-production
+#   cancel-in-progress: false
+#
+# env:
+#   REGISTRY: ghcr.io
+#   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/vantix
+#
+# jobs:
+#   # Chặn deploy nếu CI của commit này chưa đạt: kiểm tra lại build + test trước khi đóng gói
+#   verify:
+#     name: Verify
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 20
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: actions/setup-java@v6
+#         with:
+#           distribution: temurin
+#           java-version: "21"
+#           cache: maven
+#           cache-dependency-path: "backend/**/pom.xml"
+#       - name: Build and test
+#         working-directory: backend
+#         run: mvn --batch-mode --no-transfer-progress clean verify
+#
+#   build-and-push:
+#     name: Build image - ${{ matrix.service }}
+#     needs: verify
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 20
+#     permissions:
+#       contents: read
+#       packages: write # cần để push image lên GHCR
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         # Tên thư mục trong backend/services/ (đổi cho khớp cấu trúc thật)
+#         service:
+#           - api-gateway
+#           - user-service
+#           - product-service
+#           - order-service
+#           - payment-service
+#           - notification-service
+#           - bot-detection-service
+#           - assistant-service
+#     steps:
+#       - uses: actions/checkout@v4
+#
+#       - uses: docker/setup-buildx-action@v3
+#
+#       - uses: docker/login-action@v3
+#         with:
+#           registry: ${{ env.REGISTRY }}
+#           username: ${{ github.actor }}
+#           password: ${{ secrets.GITHUB_TOKEN }}
+#
+#       - id: meta
+#         uses: docker/metadata-action@v5
+#         with:
+#           images: ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}
+#           tags: |
+#             type=semver,pattern={{version}}
+#             type=sha
+#
+#       - uses: docker/build-push-action@v6
+#         with:
+#           # Java service build từ root backend (cần common-lib); chỉnh lại nếu Dockerfile đặt chỗ khác
+#           context: backend
+#           file: backend/services/${{ matrix.service }}/Dockerfile
+#           push: true
+#           tags: ${{ steps.meta.outputs.tags }}
+#           labels: ${{ steps.meta.outputs.labels }}
+#           cache-from: type=gha
+#           cache-to: type=gha,mode=max
+#
+#   deploy:
+#     name: Deploy production
+#     needs: build-and-push
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 15
+#     # Environment có Required reviewers => job dừng chờ bạn bấm duyệt
+#     environment:
+#       name: production
+#       url: https://<domain-cua-ban>
+#     steps:
+#       - name: Deploy qua SSH
+#         uses: appleboy/ssh-action@v1
+#         with:
+#           host: ${{ secrets.SSH_HOST }}
+#           username: ${{ secrets.SSH_USER }}
+#           key: ${{ secrets.SSH_PRIVATE_KEY }}
+#           script: |
+#             set -e
+#             cd /opt/vantix
+#             export IMAGE_TAG=${{ github.ref_name }}
+#             docker compose -f docker-compose.prod.yml pull
+#             docker compose -f docker-compose.prod.yml up -d --remove-orphans
+#             docker image prune -f
+#
+#       # Gợi ý: thêm bước gọi health check sau deploy, fail thì rollback về tag trước
+#       # - name: Smoke test
+#       #   run: curl --fail --retry 5 --retry-delay 5 https://<domain-cua-ban>/api/users/actuator/health

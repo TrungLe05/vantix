@@ -1,4 +1,4 @@
-name: Java CI
+name: CI
 
 on:
   push:
@@ -7,19 +7,99 @@ on:
     branches: [main, develop]
   workflow_dispatch:
 
+# Quyền tối thiểu cho toàn workflow; job nào cần thêm thì khai riêng
 permissions:
   contents: read
 
-jobs:
-  build-and-test:
-    name: Build and Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+# Push commit mới vào PR thì hủy run cũ để tiết kiệm phút runner.
+# Không hủy trên push vào main/develop để mỗi commit đều có kết quả CI đầy đủ.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+jobs:
+  # ---------------------------------------------------------------
+  # 1. Xác định phần nào của repo thay đổi để chỉ chạy job liên quan
+  # ---------------------------------------------------------------
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # paths-filter cần quyền này để liệt kê file của PR
+    outputs:
+      backend: ${{ steps.result.outputs.backend }}
+      frontend: ${{ steps.result.outputs.frontend }}
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Lọc theo đường dẫn
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+
+      # Chạy tay (workflow_dispatch) thì chạy tất cả
+      - name: Tổng hợp kết quả
+        id: result
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=${{ steps.filter.outputs.backend }}" >> "$GITHUB_OUTPUT"
+            echo "frontend=${{ steps.filter.outputs.frontend }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------
+  # 2. Kiểm tra commit message + tiêu đề PR (Conventional Commits)
+  # ---------------------------------------------------------------
+  commit-lint:
+    name: Commit lint
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # cần toàn bộ lịch sử để lint các commit trong PR
+
+      - name: Lint commit message
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: .github/workflows/commitlint.config.mjs
+
+      # Khi dùng "Squash and merge", tiêu đề PR trở thành commit message trên main
+      - name: Lint tiêu đề PR
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------
+  # 3. Backend (Java / Maven)
+  # ---------------------------------------------------------------
+  backend:
+    name: Backend - build and test
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: backend
-
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -32,5 +112,115 @@ jobs:
           cache: maven
           cache-dependency-path: "backend/**/pom.xml"
 
+      # runner ubuntu-latest có sẵn Docker nên Testcontainers chạy được ở bước verify
       - name: Build and run tests
         run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Upload báo cáo test khi thất bại
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: |
+            backend/**/target/surefire-reports/
+            backend/**/target/failsafe-reports/
+          retention-days: 7
+
+  # ---------------------------------------------------------------
+  # 4. Frontend (React / Next.js)
+  # ---------------------------------------------------------------
+  frontend:
+    name: Frontend - lint, test, build
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22" # đổi cho khớp bản Node bạn dùng ở local
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # npm ci: cài đúng theo lockfile, fail nếu lockfile lệch package.json
+      - name: Install dependencies
+        run: npm ci
+
+      # --if-present: chưa có script tương ứng thì bỏ qua, không làm fail CI
+      - name: Lint
+        run: npm run lint --if-present
+
+      # Chỉ đúng với dự án TypeScript (có tsconfig.json); dự án JS thì xóa bước này
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npm test --if-present
+
+      - name: Build
+        run: npm run build
+
+  # ---------------------------------------------------------------
+  # 5. Bảo mật: lộ secret + dependency có lỗ hổng
+  # ---------------------------------------------------------------
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Tài khoản cá nhân dùng miễn phí; repo thuộc organization cần secret GITLEAKS_LICENSE
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-review:
+    name: Dependency review
+    # Repo private cần GitHub Advanced Security mới chạy được, nên chỉ chạy cho repo public.
+    # Bật Dependency graph trong Settings > Security nếu muốn dùng.
+    if: github.event_name == 'pull_request' && !github.event.repository.private
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  # ---------------------------------------------------------------
+  # 6. Cổng chặn cuối: dùng job này làm "required status check".
+  # Job bị skip do path filter vẫn được coi là hợp lệ, nên không làm
+  # kẹt PR như khi đặt từng job riêng làm required.
+  # ---------------------------------------------------------------
+  ci-success:
+    name: CI success
+    if: always()
+    needs: [changes, commit-lint, backend, frontend, secret-scan, dependency-review]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Kiểm tra kết quả các job
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ] || \
+             [ "${{ contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "Có job thất bại hoặc bị hủy"
+            exit 1
+          fi
+          echo "Tất cả job đạt (hoặc được bỏ qua hợp lệ)"

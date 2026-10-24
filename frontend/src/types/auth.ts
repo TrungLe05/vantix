@@ -1,9 +1,9 @@
-export interface User{
-    id: String
-    email: String
-    fullName: String
-    role: String
-    status: String
-    oauthProvider: String
-    mustChangePassword: boolean
+export interface User {
+  id: string;
+  email: string;
+  fullName: string;
+  role: string;
+  status: string;
+  oauthProvider: string;
+  mustChangePassword: boolean;
 }

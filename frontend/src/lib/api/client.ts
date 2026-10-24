@@ -1,9 +1,17 @@
-import axios from "axios";
-import useAuthStore from "@/store/auth-store";
+// src/lib/api/client.ts
+import axios, { type InternalAxiosRequestConfig } from "axios";
+import { useAuthStore } from "@/store/auth-store";
+
+interface RetryableConfig extends InternalAxiosRequestConfig {
+  _retried?: boolean;
+}
+
+export const ACCESS_DENIED_EVENT = "vantix:access-denied";
+export const SERVER_ERROR_EVENT = "vantix:server-error";
 
 export const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
-  withCredentials: true, // bắt buộc — để trình duyệt gửi/nhận cookie refreshToken
+  withCredentials: true,
 });
 
 apiClient.interceptors.request.use((config) => {
@@ -15,15 +23,13 @@ apiClient.interceptors.request.use((config) => {
 let refreshPromise: Promise<string> | null = null;
 
 async function refreshAccessToken(): Promise<string> {
-  // Nhiều request 401 cùng lúc chỉ tạo ĐÚNG MỘT request refresh thật —
-  // các request sau "ăn theo" cùng 1 Promise thay vì tự gọi refresh riêng
   if (!refreshPromise) {
     refreshPromise = apiClient
       .post("/auth/refresh")
       .then((res) => {
-        const token = res.data.result.auth.accessToken;
-        useAuthStore.getState().setAccessToken(token);
-        return token;
+        const { auth, user } = res.data.result;
+        useAuthStore.getState().setSession(auth.accessToken, user);
+        return auth.accessToken as string;
       })
       .finally(() => {
         refreshPromise = null;
@@ -35,11 +41,19 @@ async function refreshAccessToken(): Promise<string> {
 apiClient.interceptors.response.use(
   (res) => res,
   async (error) => {
-    const { config, response } = error;
-    const errorCode = response?.data?.code;
+    const config = error.config as RetryableConfig;
+    const errorCode = error.response?.data?.code;
 
-    // CHỈ tự refresh khi đúng 9003 (hết hạn) — KHÔNG refresh khi 9002 (token sai),
-    // tránh vòng lặp vô ích (đúng lưu ý đã ghi ở P1_auth_api_design.md mục 4)
+    if (errorCode === 1004 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(ACCESS_DENIED_EVENT));
+    }
+    if (
+      typeof window !== "undefined" &&
+      (errorCode === 1000 || (error.response?.status ?? 0) >= 500)
+    ) {
+      window.dispatchEvent(new Event(SERVER_ERROR_EVENT));
+    }
+
     if (errorCode === 9003 && !config._retried) {
       config._retried = true;
       try {
@@ -48,15 +62,20 @@ apiClient.interceptors.response.use(
         return apiClient.request(config);
       } catch {
         useAuthStore.getState().clear();
-        window.location.href = "/login";
       }
     }
 
-    if (errorCode === 9001 || errorCode === 9002) {
-      useAuthStore.getState().clear();
-      window.location.href = "/login";
-    }
-
     return Promise.reject(error);
-  }
+  },
 );
+
+/** Đọc message lỗi theo đúng convention mục 8 của P0 — luôn ưu tiên message backend trả về. */
+export function getErrorMessage(
+  error: unknown,
+  fallback = "Đã có lỗi xảy ra, vui lòng thử lại",
+): string {
+  if (axios.isAxiosError(error) && error.response?.data?.message) {
+    return error.response.data.message as string;
+  }
+  return fallback;
+}

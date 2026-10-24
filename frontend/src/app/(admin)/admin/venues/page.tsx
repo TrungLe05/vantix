@@ -1,4 +1,4 @@
-// Trang chưa có nghiệp vụ; export component để Next.js có thể kiểm tra route.
+// Giữ route hợp lệ cho Next.js đến khi có đặc tả màn quản lý địa điểm.
 export default function AdminVenuesPage() {
   return null;
 }

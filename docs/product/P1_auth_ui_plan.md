@@ -22,7 +22,7 @@ Dựng đủ giao diện cho toàn bộ vòng đời tài khoản: đăng ký �
 | 5 | Đặt lại mật khẩu — nhập OTP + mật khẩu mới | `/forgot-password` (đổi state, không đổi route) | A11 |
 | 6 | OAuth callback (trang trung gian) | `/auth-callback` | A07 |
 | 7 | Đổi mật khẩu bắt buộc (STAFF) | `/change-password` | A12 |
-| 8 | Đổi mật khẩu chủ động (trong trang tài khoản) | `/account/security` | A12 |
+| 8 | Hồ sơ và đổi mật khẩu chủ động (modal) | `/profile` | `GET /users/me`, A12 |
 | 9 | Component dùng chung: menu tài khoản (avatar + dropdown logout) | nằm trong `Header`, không phải route riêng | A09, A13 |
 
 **Màn hình 4 và 5 dùng chung 1 route, đổi qua lại bằng local state** — đúng theo mockup Prompt 6 đã duyệt trước đó (2 "state" trong cùng 1 card), và đúng bản chất nghiệp vụ: A10/A11 là một vòng đời liền mạch (đã ghi rõ ở `P1_auth_api_design.md` mục A10), không phải 2 trang độc lập.
@@ -52,6 +52,8 @@ flowchart TD
 
     ChangePwd -->|200| Login
 
+    Home -->|mở hồ sơ| Profile[/profile/]
+    Profile -->|đổi mật khẩu| PasswordModal[Modal đổi mật khẩu]
     Home -->|logout| Login
 ```
 
@@ -109,21 +111,21 @@ Trang **trung gian, không có UI tương tác** — chỉ hiện spinner "Đang
 
 ### 4.6 Change Password — bắt buộc (`/change-password`)
 
-**Khác `/account/security` (mục 4.7) ở chỗ:** không có nút "Hủy"/"Quay lại" — người dùng **bị kẹt** ở trang này cho tới khi đổi xong, đúng tinh thần ép buộc của `mcp=true`. Route này cũng nên tự kiểm tra: nếu `user.mustChangePassword === false` (đã đổi xong hoặc không cần), tự `redirect` về Home — tránh người dùng vào thẳng URL khi không cần.
+**Khác modal đổi mật khẩu chủ động trong `/profile` (mục 4.7) ở chỗ:** không có nút "Hủy"/"Quay lại" — người dùng **bị kẹt** ở trang này cho tới khi đổi xong, đúng tinh thần ép buộc của `mcp=true`. Route này cũng nên tự kiểm tra: nếu `user.mustChangePassword === false` (đã đổi xong hoặc không cần), tự `redirect` về Home — tránh người dùng vào thẳng URL khi không cần.
 
-**Hành vi:** giống `/account/security` (dùng chung 1 component form, khác nhau ở phần khung bao ngoài/có nút hủy hay không) — xem mục 4.7.
+**Hành vi:** dùng cùng quy tắc validation và API với modal đổi mật khẩu chủ động, nhưng không cho đóng modal hoặc rời trang khi `mustChangePassword = true`.
 
-### 4.7 Change Password — chủ động (`/account/security`)
+### 4.7 Hồ sơ và đổi mật khẩu — chủ động (`/profile`)
 
-Form: `oldPassword`, `newPassword`, nút "Đổi mật khẩu".
+Hồ sơ gọi `GET /users/me` và hiển thị `fullName`, `email`, `role`, `status`, `oauthProvider`. API hiện chưa hỗ trợ sửa tên hoặc email nên các trường này chỉ xem được. Với tài khoản email/mật khẩu, nút "Đổi mật khẩu" mở modal gồm `oldPassword`, `newPassword` và trường xác nhận mật khẩu (chỉ kiểm tra phía UI). Tài khoản Google hiển thị trạng thái quản lý bởi Google và liên kết sang luồng đặt mật khẩu qua email.
 
 **Hành vi:**
-- Submit `PATCH /auth/change-password`. `onSuccess` → vì backend đã **thu hồi toàn bộ refresh token**, access token hiện tại (dù còn hạn 15 phút) sẽ không refresh được nữa — chủ động `clear()` Zustand store và `router.push("/login")` kèm thông báo "Đổi mật khẩu thành công, vui lòng đăng nhập lại", **không** cố giữ phiên hiện tại.
+- Submit `PATCH /auth/change-password`. `onSuccess` → vì backend đã **thu hồi toàn bộ refresh token**, access token hiện tại (dù còn hạn 15 phút) sẽ không refresh được nữa — chủ động `clear()` Zustand store và chuyển về `/login?passwordChanged=1` kèm thông báo "Đổi mật khẩu thành công, vui lòng đăng nhập lại", **không** cố giữ phiên hiện tại.
 - Lỗi `2403 PASSWORD_NOT_SET` (tài khoản chỉ đăng nhập Google): hiển thị thông báo kèm link trỏ sang `/forgot-password` thay vì chỉ hiện message thô — đúng gợi ý trong `message` của backend ("hãy dùng chức năng quên mật khẩu để đặt").
 
 ### 4.8 Account menu (component, không phải route)
 
-Avatar + tên hiển thị ở góc phải `Header` (lấy từ `UserResponse` trong store). Dropdown gồm: "Tài khoản" (→ `/account/security`), "Đăng xuất".
+`Header` có liên kết "Tài khoản" đến `/profile` và nút "Đăng xuất". Hồ sơ đọc từ API `GET /users/me`; trạng thái đăng nhập hiện tại lấy từ `UserResponse`.
 
 **Hành vi đăng xuất:** gọi `POST /auth/logout` trước (để backend thu hồi refresh token/xóa cookie), **rồi mới** `clear()` store và điều hướng — không làm ngược lại thứ tự, nếu không request logout sẽ thiếu `Authorization` header do store đã bị xóa trước.
 

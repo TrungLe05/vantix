@@ -8,10 +8,10 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   BadgeCheck,
-  CircleUserRound,
   KeyRound,
   LoaderCircle,
   LockKeyhole,
+  LogOut,
   Mail,
   ShieldCheck,
   UserRound,
@@ -25,22 +25,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { changePassword, getCurrentUser } from "@/lib/api/auth";
+import { changePassword, getCurrentUser, logout } from "@/lib/api/auth";
 import { getErrorMessage } from "@/lib/api/client";
 import { useAuthStore } from "@/store/auth-store";
 import type { UserResponse } from "@/types/auth";
 import type { ApiResponse } from "@/types/common";
 
 const roleLabels: Record<UserResponse["role"], string> = {
-  BUYER: "Người mua",
-  ADMIN: "Quản trị viên",
-  STAFF: "Nhân viên",
+  BUYER: "Buyer",
+  ADMIN: "Administrator",
+  STAFF: "Staff",
 };
 
 const statusLabels: Record<UserResponse["status"], string> = {
-  ACTIVE: "Đang hoạt động",
-  PENDING_VERIFICATION: "Chờ xác thực email",
-  LOCKED: "Đã khóa",
+  ACTIVE: "Active",
+  PENDING_VERIFICATION: "Pending email verification",
+  LOCKED: "Locked",
 };
 
 function initials(fullName: string) {
@@ -50,17 +50,21 @@ function initials(fullName: string) {
     .slice(-2)
     .map((part) => part[0])
     .join("")
-    .toLocaleUpperCase("vi");
+    .toLocaleUpperCase("en");
 }
 
 export default function ProfilePage() {
   const router = useRouter();
   const clearSession = useAuthStore((state) => state.clear);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState(false);
   const [isPasswordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [validationMessage, setValidationMessage] = useState<string | null>(
+    null,
+  );
   const {
     data: user,
     isPending,
@@ -89,7 +93,7 @@ export default function ProfilePage() {
     event.preventDefault();
     setValidationMessage(null);
     if (newPassword !== confirmPassword) {
-      setValidationMessage("Mật khẩu xác nhận chưa khớp.");
+      setValidationMessage("The passwords do not match.");
       return;
     }
     if (
@@ -97,7 +101,9 @@ export default function ProfilePage() {
       newPassword.length > 64 ||
       !/(?=.*[A-Za-z])(?=.*\d)/.test(newPassword)
     ) {
-      setValidationMessage("Mật khẩu mới cần có 8–64 ký tự, gồm ít nhất một chữ cái và một chữ số.");
+      setValidationMessage(
+        "Password must be 8–64 characters and include at least one letter and one number.",
+      );
       return;
     }
     passwordMutation.mutate();
@@ -114,6 +120,20 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleLogout() {
+    setIsLoggingOut(true);
+    setLogoutError(false);
+    try {
+      await logout();
+      clearSession();
+      router.replace("/login");
+    } catch {
+      setLogoutError(true);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-muted/40 text-foreground">
       <EventHeader />
@@ -123,43 +143,26 @@ export default function ProfilePage() {
           className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft aria-hidden="true" className="size-4" />
-          Về trang khám phá
+          Back to Discover
         </Link>
-        <div className="mt-7 grid gap-8 lg:grid-cols-[230px_minmax(0,1fr)]">
-          <aside className="h-fit rounded-2xl border border-border bg-card p-3 shadow-sm">
-            <p className="px-3 pb-3 pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Tài khoản
-            </p>
-            <a
-              href="#profile-details"
-              className="flex min-h-11 items-center gap-3 rounded-xl bg-accent px-3 text-sm font-semibold text-accent-foreground"
-            >
-              <CircleUserRound aria-hidden="true" className="size-4" />
-              Hồ sơ của tôi
-            </a>
-            <a
-              href="#security"
-              className="mt-1 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <LockKeyhole aria-hidden="true" className="size-4" />
-              Bảo mật
-            </a>
-          </aside>
-
+        <div className="mt-7">
           <div className="min-w-0">
             <div className="mb-6">
-              <p className="text-sm font-semibold text-primary">VANTIX ACCOUNT</p>
+              <p className="text-sm font-semibold text-primary">
+                VANTIX ACCOUNT
+              </p>
               <h1 className="mt-2 font-heading text-3xl font-bold tracking-tight sm:text-4xl">
-                Hồ sơ của tôi
+                My profile
               </h1>
+              <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" onClick={handleLogout} disabled={isLoggingOut} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold transition hover:bg-muted disabled:opacity-60"><LogOut aria-hidden="true" className="size-4" />{isLoggingOut ? "Signing out…" : "Sign out"}</button>{logoutError ? <span role="alert" className="text-sm text-destructive">Could not sign out. Please try again.</span> : null}</div>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Xem thông tin tài khoản và quản lý thiết lập bảo mật.
+                View your account information and manage security settings.
               </p>
             </div>
 
             {isPending ? (
               <div
-                aria-label="Đang tải hồ sơ"
+                aria-label="Loading profile"
                 className="space-y-5 rounded-2xl border border-border bg-card p-6 shadow-sm"
               >
                 <div className="flex items-center gap-4">
@@ -179,7 +182,7 @@ export default function ProfilePage() {
                 className="rounded-2xl border border-destructive/30 bg-card p-6 shadow-sm"
               >
                 <h2 className="font-heading text-lg font-semibold">
-                  Không tải được hồ sơ
+                  Could not load your profile
                 </h2>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {getErrorMessage(error)}
@@ -190,13 +193,13 @@ export default function ProfilePage() {
                     onClick={() => refetch()}
                     className="min-h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90"
                   >
-                    Thử lại
+                    Try again
                   </button>
                   <Link
                     href="/login"
                     className="inline-flex min-h-10 items-center rounded-lg border border-border px-4 text-sm font-semibold hover:bg-muted"
                   >
-                    Đăng nhập
+                    Log in
                   </Link>
                 </div>
               </div>
@@ -231,45 +234,62 @@ export default function ProfilePage() {
                   <div className="grid gap-x-8 sm:grid-cols-2">
                     <div className="border-b border-border py-5 sm:border-b-0">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Họ và tên
+                        Full name
                       </p>
                       <p className="mt-2 flex items-center gap-2 text-sm font-medium">
-                        <UserRound aria-hidden="true" className="size-4 text-muted-foreground" />
+                        <UserRound
+                          aria-hidden="true"
+                          className="size-4 text-muted-foreground"
+                        />
                         {user.fullName}
                       </p>
                     </div>
                     <div className="border-b border-border py-5 sm:border-b-0">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Địa chỉ email
+                        Email address
                       </p>
                       <p className="mt-2 flex items-center gap-2 break-all text-sm font-medium">
-                        <Mail aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+                        <Mail
+                          aria-hidden="true"
+                          className="size-4 shrink-0 text-muted-foreground"
+                        />
                         {user.email}
                       </p>
                     </div>
                     <div className="border-b border-border py-5 sm:border-b-0 sm:border-t sm:border-border">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Trạng thái tài khoản
+                        Account status
                       </p>
                       <p className="mt-2 flex items-center gap-2 text-sm font-medium">
-                        <ShieldCheck aria-hidden="true" className="size-4 text-primary" />
+                        <ShieldCheck
+                          aria-hidden="true"
+                          className="size-4 text-primary"
+                        />
                         {statusLabels[user.status]}
                       </p>
                     </div>
                     <div className="py-5 sm:border-t sm:border-border">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Phương thức đăng nhập
+                        Sign-in method
                       </p>
                       <p className="mt-2 flex items-center gap-2 text-sm font-medium">
                         {user.oauthProvider === "GOOGLE" ? (
                           <>
-                            <span aria-hidden="true" className="flex size-5 items-center justify-center rounded-full border text-xs font-bold">G</span>
-                            Tài khoản Google
+                            <span
+                              aria-hidden="true"
+                              className="flex size-5 items-center justify-center rounded-full border text-xs font-bold"
+                            >
+                              G
+                            </span>
+                            Google account
                           </>
                         ) : (
                           <>
-                            <KeyRound aria-hidden="true" className="size-4 text-muted-foreground" />
-                            Email và mật khẩu
+                            <KeyRound
+                              aria-hidden="true"
+                              className="size-4 text-muted-foreground"
+                            />
+                            Email and password
                           </>
                         )}
                       </p>
@@ -283,11 +303,13 @@ export default function ProfilePage() {
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <h2 className="font-heading text-lg font-semibold">Bảo mật</h2>
+                      <h2 className="font-heading text-lg font-semibold">
+                        Security
+                      </h2>
                       <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
                         {user.oauthProvider === "GOOGLE"
-                          ? "Mật khẩu được quản lý bởi Google. Bạn có thể đặt mật khẩu Vantix qua chức năng quên mật khẩu."
-                          : "Đổi mật khẩu định kỳ để giữ an toàn cho tài khoản của bạn."}
+                          ? "Your password is managed by Google. You can set a Vantix password using the forgot password flow."
+                          : "Change your password regularly to keep your account secure."}
                       </p>
                     </div>
                     {user.oauthProvider === "GOOGLE" ? (
@@ -295,7 +317,7 @@ export default function ProfilePage() {
                         href="/forgot-password"
                         className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold hover:bg-muted"
                       >
-                        Đặt mật khẩu Vantix
+                        Set a Vantix password
                       </Link>
                     ) : (
                       <button
@@ -304,7 +326,7 @@ export default function ProfilePage() {
                         className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90"
                       >
                         <LockKeyhole aria-hidden="true" className="size-4" />
-                        Đổi mật khẩu
+                        Change password
                       </button>
                     )}
                   </div>
@@ -319,14 +341,14 @@ export default function ProfilePage() {
       <Dialog open={isPasswordDialogOpen} onOpenChange={closePasswordDialog}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Đổi mật khẩu</DialogTitle>
+            <DialogTitle>Change password</DialogTitle>
             <DialogDescription>
-              Nhập mật khẩu hiện tại và chọn mật khẩu mới cho tài khoản.
+              Enter your current password and choose a new password for your account.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={submitPasswordChange} className="space-y-4">
             <label className="block space-y-1.5 text-sm font-medium">
-              Mật khẩu hiện tại
+              Current password
               <input
                 autoComplete="current-password"
                 required
@@ -337,7 +359,7 @@ export default function ProfilePage() {
               />
             </label>
             <label className="block space-y-1.5 text-sm font-medium">
-              Mật khẩu mới
+              New password
               <input
                 autoComplete="new-password"
                 required
@@ -347,11 +369,11 @@ export default function ProfilePage() {
                 className="min-h-11 w-full rounded-lg border border-input bg-background px-3 outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
               <span className="block text-xs font-normal text-muted-foreground">
-                8–64 ký tự, gồm ít nhất một chữ cái và một chữ số.
+                8–64 characters, including at least one letter and one number.
               </span>
             </label>
             <label className="block space-y-1.5 text-sm font-medium">
-              Xác nhận mật khẩu mới
+              Confirm new password
               <input
                 autoComplete="new-password"
                 required
@@ -370,8 +392,11 @@ export default function ProfilePage() {
               <div role="alert" className="space-y-1 text-sm text-destructive">
                 <p>{getErrorMessage(passwordMutation.error)}</p>
                 {passwordErrorCode === 2403 ? (
-                  <Link className="font-semibold underline underline-offset-4" href="/forgot-password">
-                    Đặt mật khẩu bằng email
+                  <Link
+                    className="font-semibold underline underline-offset-4"
+                    href="/forgot-password"
+                  >
+                    Set a password with email
                   </Link>
                 ) : null}
               </div>
@@ -382,7 +407,7 @@ export default function ProfilePage() {
                 onClick={() => closePasswordDialog(false)}
                 className="inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold hover:bg-muted"
               >
-                Hủy
+                Cancel
               </button>
               <button
                 type="submit"
@@ -390,9 +415,14 @@ export default function ProfilePage() {
                 className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
               >
                 {passwordMutation.isPending ? (
-                  <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="size-4 animate-spin"
+                  />
                 ) : null}
-                {passwordMutation.isPending ? "Đang cập nhật…" : "Cập nhật mật khẩu"}
+                {passwordMutation.isPending
+                  ? "Updating…"
+                  : "Update password"}
               </button>
             </DialogFooter>
           </form>

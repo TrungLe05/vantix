@@ -69,10 +69,10 @@ apiClient.interceptors.response.use(
   },
 );
 
-/** Đọc message lỗi theo đúng convention mục 8 của P0 — luôn ưu tiên message backend trả về. */
+/** Read API errors using the P0 convention, preferring the backend message. */
 export function getErrorMessage(
   error: unknown,
-  fallback = "Đã có lỗi xảy ra, vui lòng thử lại",
+  fallback = "An error occurred. Please try again.",
 ): string {
   if (axios.isAxiosError(error) && error.response?.data?.message) {
     return error.response.data.message as string;

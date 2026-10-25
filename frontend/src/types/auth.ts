@@ -23,4 +23,5 @@ export interface AuthResponse {
 export interface LoginResponse {
   auth: AuthResponse;
   user: UserResponse;
+  isNewUser: boolean;
 }

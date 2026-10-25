@@ -207,11 +207,12 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(UserErrorCode.OAUTH_EMAIL_NOT_VERIFIED);
         }
 
-        User user = resolveGoogleUser(sub, email, fullName);
+        GoogleUserResolution resolution = resolveGoogleUser(sub, email, fullName);
+        User user = resolution.user();
 
         String oneTimeCode = randomStringGenerator.generate(32);
         redisTemplate.opsForValue().set(
-                "oauth:code:" + oneTimeCode, user.getId().toString(), Duration.ofSeconds(60)
+                "oauth:code:" + oneTimeCode, user.getId() + ":" + resolution.isNewUser(), Duration.ofSeconds(60)
         );
         return oneTimeCode;
     }
@@ -228,7 +229,8 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(UserErrorCode.OAUTH_EXCHANGE_CODE_INVALID);
         }
 
-        User user = userRepository.findById(UUID.fromString(userIdRaw))
+        String[] exchangeData = userIdRaw.split(":", 2);
+        User user = userRepository.findById(UUID.fromString(exchangeData[0]))
                 .filter(u -> u.getDeletedAt() == null)
                 .orElseThrow(() -> new AppException(UserErrorCode.USER_NOT_FOUND));
 
@@ -236,7 +238,7 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(UserErrorCode.ACCOUNT_LOCKED);
         }
 
-        return issueTokens(user, UUID.randomUUID());
+        return issueTokens(user, UUID.randomUUID(), exchangeData.length == 2 && Boolean.parseBoolean(exchangeData[1]));
     }
 
     @Override
@@ -387,6 +389,10 @@ public class AuthServiceImpl implements AuthService {
 
 
     private LoginResponse issueTokens(User user, UUID familyId) {
+        return issueTokens(user, familyId, false);
+    }
+
+    private LoginResponse issueTokens(User user, UUID familyId, boolean isNewUser) {
 
         String rawRefreshToken = jwtUtils.generateRefreshToken(
                 user.getId().toString(), user.getRole().name(), user.getEmail(), user.isMustChangePassword()
@@ -403,15 +409,15 @@ public class AuthServiceImpl implements AuthService {
                 user.getId().toString(), user.getRole().name(), user.getEmail(), user.isMustChangePassword()
         );
 
-        return buildResponse(user, accessToken, rawRefreshToken);
+        return buildResponse(user, accessToken, rawRefreshToken, isNewUser);
     }
 
-    private User resolveGoogleUser(String sub, String email, String fullName) {
+    private GoogleUserResolution resolveGoogleUser(String sub, String email, String fullName) {
         var byOauthId = userRepository.findByOauthProviderAndOauthIdAndDeletedAtIsNull(OauthProvider.GOOGLE, sub);
         if (byOauthId.isPresent()) {
             User user = byOauthId.get();
             if (user.getStatus() == UserStatus.LOCKED) throw new AppException(UserErrorCode.ACCOUNT_LOCKED);
-            return user;
+            return new GoogleUserResolution(user, false);
         }
 
         String normalizedEmail = email.trim().toLowerCase();
@@ -424,7 +430,7 @@ public class AuthServiceImpl implements AuthService {
             }
             if (user.getStatus() == UserStatus.LOCKED) throw new AppException(UserErrorCode.ACCOUNT_LOCKED);
 
-            return transactionTemplate.execute(status -> {
+            User linkedUser = transactionTemplate.execute(status -> {
                 if (user.getStatus() == UserStatus.PENDING_VERIFICATION) {
                     user.setStatus(UserStatus.ACTIVE);
                     user.setPasswordHash(null); // chống pre-hijacking
@@ -433,9 +439,10 @@ public class AuthServiceImpl implements AuthService {
                 user.setOauthId(sub);
                 return userRepository.save(user);
             });
+            return new GoogleUserResolution(linkedUser, false);
         }
 
-        return transactionTemplate.execute(status -> userRepository.save(
+        User newUser = transactionTemplate.execute(status -> userRepository.save(
                 User.builder()
                         .email(normalizedEmail)
                         .fullName(fullName != null ? fullName : normalizedEmail.split("@")[0])
@@ -445,11 +452,18 @@ public class AuthServiceImpl implements AuthService {
                         .oauthId(sub)
                         .build()
         ));
+        return new GoogleUserResolution(newUser, true);
     }
+
+    private record GoogleUserResolution(User user, boolean isNewUser) {}
 
 
     // helper method
     private LoginResponse buildResponse(User user, String accessToken, String rawRefreshToken){
+        return buildResponse(user, accessToken, rawRefreshToken, false);
+    }
+
+    private LoginResponse buildResponse(User user, String accessToken, String rawRefreshToken, boolean isNewUser){
         return LoginResponse.builder()
                 .auth(AuthResponse.builder()
                         .accessToken(accessToken)
@@ -466,6 +480,7 @@ public class AuthServiceImpl implements AuthService {
                         .fullName(user.getFullName())
                         .mustChangePassword(user.isMustChangePassword())
                         .build())
+                .isNewUser(isNewUser)
                 .build();
     }
 }

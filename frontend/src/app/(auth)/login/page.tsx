@@ -20,8 +20,8 @@ import { Mail } from "lucide-react";
 import { IconInput } from "@/components/auth/IconInput";
 
 const loginSchema = z.object({
-  email: z.string().email("Email không đúng định dạng"),
-  password: z.string().min(1, "Vui lòng nhập mật khẩu"),
+  email: z.string().email("Enter a valid email address"),
+  password: z.string().min(1, "Enter your password"),
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -41,29 +41,50 @@ function LoginForm() {
     mutationFn: (data: LoginForm) => login(data.email, data.password),
     onSuccess: ({ auth, user }) => {
       setSession(auth.accessToken, user);
-      router.push(user.mustChangePassword ? "/change-password" : "/");
+      router.push(
+        user.mustChangePassword
+          ? "/change-password"
+          : user.role === "ADMIN"
+            ? "/admin/events"
+            : "/",
+      );
     },
   });
 
   return (
     <AuthCard>
-      <h1 className="font-heading text-2xl font-bold tracking-tight">Chào mừng bạn quay lại</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Đăng nhập để tiếp tục với Vantix</p>
-      {searchParams.get("passwordReset") === "1" || searchParams.get("passwordChanged") === "1" ? <p role="status" className="mt-4 rounded-lg bg-primary/10 p-3 text-sm text-primary">Mật khẩu đã được cập nhật. Hãy đăng nhập lại.</p> : null}
+      <h1 className="font-heading text-2xl font-bold tracking-tight">
+        Welcome back
+      </h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Log in to continue to Vantix
+      </p>
+      {searchParams.get("passwordReset") === "1" ||
+      searchParams.get("passwordChanged") === "1" ? (
+        <p
+          role="status"
+          className="mt-4 rounded-lg bg-primary/10 p-3 text-sm text-primary"
+        >
+          Your password has been updated. Please log in again.
+        </p>
+      ) : null}
 
       <form
         onSubmit={handleSubmit((data) => mutation.mutate(data))}
         className="mt-7 space-y-4"
       >
         {mutation.isError && (
-          <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+          <p
+            role="alert"
+            className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+          >
             {getErrorMessage(mutation.error)}
           </p>
         )}
 
         <div>
           <Label htmlFor="email" className="font-semibold">
-            Địa chỉ email
+            Email address
           </Label>
           <div className="mt-1.5">
             <IconInput
@@ -76,24 +97,22 @@ function LoginForm() {
             />
           </div>
           {errors.email && (
-            <p className="mt-1 text-sm text-destructive">{errors.email.message}</p>
+            <p className="mt-1 text-sm text-destructive">
+              {errors.email.message}
+            </p>
           )}
         </div>
 
         <div>
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password" className="font-semibold">Mật khẩu</Label>
-            <Link
-              href="/forgot-password"
-              className="text-sm font-medium text-primary"
-            >
-              Quên mật khẩu?
-            </Link>
+          <div className="mb-2">
+            <Label htmlFor="password" className="font-semibold">
+              Password
+            </Label>
           </div>
           <PasswordInput
             id="password"
             autoComplete="current-password"
-            placeholder="Nhập mật khẩu"
+            placeholder="Enter your password"
             {...register("password")}
           />
           {errors.password && (
@@ -101,10 +120,16 @@ function LoginForm() {
               {errors.password.message}
             </p>
           )}
+          <Link
+            href="/forgot-password"
+            className="text-sm text-primary flex justify-end mt-2 font-semibold"
+          >
+            Forgot password?
+          </Link>
         </div>
 
-        <Button type="submit" className="w-full" disabled={mutation.isPending}>
-          {mutation.isPending ? "Đang đăng nhập…" : "Đăng nhập"}
+        <Button type="submit" className="w-full rounded-lg" disabled={mutation.isPending}>
+          {mutation.isPending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
 
@@ -117,9 +142,9 @@ function LoginForm() {
       <GoogleButton />
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        Chưa có tài khoản?{" "}
-        <Link href="/register" className="font-medium text-primary">
-          Đăng ký
+        Don&apos;t have an account?{" "}
+        <Link href="/register" className="font-semibold text-primary">
+          Sign up
         </Link>
       </p>
     </AuthCard>
@@ -127,5 +152,11 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
-  return <Suspense fallback={<main className="min-h-screen animate-pulse bg-muted" />}><LoginForm /></Suspense>;
+  return (
+    <Suspense
+      fallback={<main className="min-h-screen animate-pulse bg-muted" />}
+    >
+      <LoginForm />
+    </Suspense>
+  );
 }

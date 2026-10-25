@@ -8,7 +8,7 @@ import "./globals.css";
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
-  display: "swap", // tránh FOIT (chữ ẩn trong lúc font đang tải)
+  display: "swap", // Avoid invisible text while the font loads.
 });
 
 export const metadata: Metadata = { title: "Vantix" };

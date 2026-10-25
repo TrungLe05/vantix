@@ -57,8 +57,8 @@
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(
     0.511 0.262 276.966
-  ); /* indigo, tương đương #4F46E5 trong mockup */
-  --primary-foreground: oklch(0.98 0 0); /* trắng, chữ trên nền primary */
+  ); /* Indigo, equivalent to #4F46E5 in the mockup. */
+  --primary-foreground: oklch(0.98 0 0); /* White text on the primary color. */
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);

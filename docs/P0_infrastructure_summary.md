@@ -90,7 +90,7 @@ Trong lúc dựng P0, một phát hiện quan trọng đã làm thay đổi vers
 | notification-service | 9000 | `/api`                        | `notification_service` | Java/Spring Boot |
 | order-service | 9001 | `/api`                        | `order_service` | Java/Spring Boot |
 | payment-service | 9002 | `/api`                        | `payment_service` | Java/Spring Boot |
-| product-service | 9003 | `/api`                        | `product_service` | Java/Spring Boot |
+| product-service | 9003 | `/api`                        | `products_service` | Java/Spring Boot |
 | user-service | 9004 | `/api`                        | `user_service` | Java/Spring Boot |
 | bot-detection-service | 9005 | `/api/bot-detection`          | — (chưa cần ở P0) | Python/FastAPI |
 | assistant-service | 9006 | `/api/assistant`              | — (stateless) | Python/FastAPI |

@@ -1,8 +1,37 @@
 # Vantix — Phase 2: Product — API Design
 
-> **Trạng thái:** Thiết kế — dùng để code theo, chưa phải tài liệu tổng kết sau khi làm xong.
+> **Trạng thái:** Đã đối chiếu với implementation trong `backend/services/product-service` (25/10/2026). P2 **chưa hoàn thiện**; xem mục “Kết quả audit implementation” bên dưới. Nội dung hợp đồng API được cập nhật theo code hiện tại; các sai lệch còn tồn tại được ghi rõ, không coi là đã hoàn thành.
 > **Liên quan:** `P2_product_design.md` (quyết định chốt, vòng đời Event, use case, ERD, sequence), `P1_auth_api_design.md` (quy ước chung dùng lại), `00_roadmap_phases_v1.md` (mục P2)
 > **Phạm vi:** toàn bộ API của `product-service` trong P2 (Venue, Event, SeatMap/Seat, TicketType). Mỗi API mô tả: request, response, lỗi (HTTP status + errorCode), các bước thực thi.
+
+## Kết quả audit implementation
+
+| Hạng mục | Trạng thái theo code | Ghi chú |
+|---|---|---|
+| PR01–PR13 | Đã có controller/service/repository tương ứng | Các route được khai báo; chưa có test tự động của product-service trong repository. |
+| PR05 — publish | Chưa đủ điều kiện thời gian | Hàm publish chỉ kiểm tra hạng vé và ghế; không xác thực lại `startAt`/sales window như mục 5.3 của tài liệu thiết kế. |
+| PR06 — cancel + Kafka | Có publish event, nhưng sai thời điểm so với hợp đồng | `kafkaTemplate.send` được gọi bên trong transaction; code chưa bảo đảm gửi sau khi DB commit như mô tả ở mục 4.3. |
+| Danh sách ADMIN | Chưa triển khai | PR07 chỉ trả PUBLISHED và event chưa diễn ra. UI plan cần ADMIN xem DRAFT/mọi trạng thái nhưng hiện không có API đáp ứng. |
+| Validation tên khi PATCH | Chưa đủ | `UpdateEventRequest.name` và `UpdateTicketTypeRequest.name` chỉ giới hạn độ dài, không từ chối chuỗi rỗng/toàn khoảng trắng; service trim và vẫn lưu được chuỗi rỗng. |
+| Tên database/bootstrap | Cấu hình code là `products_service` | Docs đã được đồng bộ theo code; Compose hiện chưa tạo database này tường minh, vì vậy cần provision `products_service` trước khi Flyway chạy. |
+| Tests | Chưa có | Không tìm thấy test trong module `product-service`; vì vậy chưa có bằng chứng tự động cho các luồng và điều kiện lỗi. |
+
+### Phạm vi P2 đã có trong code
+
+- Quản lý venue; tạo/sửa/publish/cancel event; danh sách công khai và chi tiết event.
+- Tạo seat map và thêm ghế theo lô; tạo ticket type GA/SEATED và cập nhật tên/giá.
+- Schema Flyway, seed events; giới hạn truy cập ghi cho ADMIN, đọc công khai; lỗi nghiệp vụ tập trung theo `ApiResponse`.
+- PR07 lọc `PUBLISHED` có `startAt >= now`, sắp xếp tăng theo thời gian. PR13 cho phép đổi tên/giá cả khi event đã PUBLISHED. Đây là hành vi đang chạy trong code.
+
+### Việc còn thiếu để kết luận P2 hoàn thành
+
+1. Bổ sung validate thời gian khi publish và xác thực trường PATCH `name` không rỗng.
+2. Chuyển phát Kafka cancellation sang sau commit (hoặc cơ chế bền vững tương đương) để sự kiện không được phát nếu transaction DB rollback.
+3. Bổ sung API danh sách ADMIN có thể truy vấn DRAFT/PUBLISHED/CANCELLED, hoặc sửa UI plan nếu P2 không yêu cầu màn hình quản lý danh sách event.
+4. Bổ sung tạo database `products_service` trong compose/bootstrap; hiện runtime có rủi ro Flyway kết nối tới DB không tồn tại.
+5. Bổ sung test cho các luồng chính và các validation nêu trên.
+
+Các điểm #1–#5 là gap implementation; không được hiểu là đã hoàn thành chỉ vì API được liệt kê ở bảng PR.
 
 ---
 
@@ -635,4 +664,4 @@ Hằng số topic đầu tiên thêm vào `KafkaTopics` (module `commonlib-kafka
 
 ---
 
-*Hết tài liệu API design P2. Bước tiếp theo: xác nhận mục 9 → bắt đầu code `product-service` (entity, Flyway migration, repository, service, controller) theo đúng thứ tự đã làm ở P1.*
+*Tài liệu này phản ánh hợp đồng đã thiết kế và code được audit. Trước khi đánh dấu P2 hoàn tất, xử lý các gap trong “Kết quả audit implementation” và cập nhật trạng thái sau khi có kiểm chứng.*

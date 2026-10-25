@@ -1,6 +1,6 @@
 # Vantix — Phase 2: Product (Catalog: sự kiện, sơ đồ ghế, GA) — Tài liệu thiết kế
 
-> **Trạng thái:** Thiết kế — dùng để code theo, chưa phải tài liệu tổng kết sau khi làm xong.
+> **Trạng thái:** Thiết kế ban đầu; đã được đối chiếu với code ngày 25/10/2026. API hiện có và các gap còn lại được tổng kết tại `P2_product_api_design.md` → “Kết quả audit implementation”.
 > **Liên quan:** `00_roadmap_phases_v1.md` (mục P2), `P0_infrastructure_summary.md`, `P1_auth_design.md`/`P1_auth_api_design.md`
 
 ---
@@ -18,7 +18,7 @@
 | 7 | Số lượng (`total_quantity`) trên `TicketType`: với GA là số nhập tay (kho vé); với SEATED là **giá trị dẫn xuất** từ số ghế thực tế được gán vào hạng vé đó, không nhập tay riêng — tránh hai nguồn sự thật lệch nhau |
 | 8 | API đọc catalog (danh sách/chi tiết sự kiện) là **công khai**, không cần đăng nhập — duyệt sự kiện giống một trang thương mại điện tử thông thường. Chỉ hành động mua/giữ chỗ (Order, P3) mới cần JWT |
 | 9 | API ghi (tạo/sửa sự kiện, sơ đồ ghế, hạng vé) chỉ **ADMIN** — theo đúng mô hình Trust-The-Gateway đã dùng ở P1 (đọc `X-User-Role` do Gateway inject) |
-| 10 | `product-service` có database Postgres riêng (`product_service`), theo nguyên tắc database-per-service đã chốt ở roadmap mục 3.4 |
+| 10 | `product-service` dùng database Postgres riêng. Theo cấu hình code hiện tại, tên database là `products_service`; cần bootstrap DB trước khi Flyway chạy (compose hiện chưa tạo DB này tường minh). |
 
 ---
 
@@ -36,8 +36,8 @@ stateDiagram-v2
 ```
 
 - **DRAFT**: BUYER không thấy (API danh sách chỉ trả `PUBLISHED`). ADMIN tự do thêm/sửa/xóa sơ đồ ghế và hạng vé.
-- **PUBLISHED**: BUYER thấy và mua được (ở P3). Điều kiện để publish: có ít nhất 1 `TicketType` (SEATED có ghế gán, hoặc GA có `total_quantity > 0`), có `start_at`/`sales_start_at`/`sales_end_at` hợp lệ (xem mục 5.3 validate).
-- **CANCELLED**: BUYER vẫn xem được (để biết sự kiện đã hủy) nhưng không mua được. Trigger hoàn tiền 100% cho vé đã bán (FR4) là việc của Order/Payment ở P4 — Product chỉ phát tín hiệu trạng thái, **chưa quyết cơ chế đồng bộ** (xem mục 6, backlog #1).
+- **PUBLISHED**: BUYER thấy trong catalog (ở P3 có thể mua). Thiết kế yêu cầu publish kiểm tra thời gian và hạng vé. Code hiện kiểm tra hạng vé/ghế nhưng **chưa kiểm tra lại thời gian** tại thời điểm publish.
+- **CANCELLED**: BUYER vẫn xem được (để biết sự kiện đã hủy) nhưng không mua được. Quyết định đã chốt ở API design: Product phát Kafka `product.event-cancelled`; P2 chỉ có producer, consumer thuộc Order/Payment ở P4. Code hiện gửi Kafka bên trong transaction nên chưa bảo đảm thứ tự sau DB commit.
 - P2 **không** có trạng thái sự kiện đã diễn ra xong (`COMPLETED`) — để dành giai đoạn sau nếu cần phân biệt hiển thị.
 
 ---
@@ -239,13 +239,14 @@ sequenceDiagram
 
 ---
 
-## 6. Backlog cần quyết ở bước thiết kế API chi tiết (chưa chặn P2)
+## 6. Các quyết định sau thiết kế và trạng thái thực hiện
 
-1. **Trigger hoàn tiền khi ADMIN hủy sự kiện (FR4):** Order/Payment cần biết Event chuyển `CANCELLED` để hoàn 100% bất kể thời điểm. Đồng bộ qua Kafka (`event.cancelled`, Product publish, Order consume) hay Order tự gọi REST kiểm tra status lúc xử lý? Quyết ở P4 theo đúng nguyên tắc async cho luồng không cần phản hồi ngay (roadmap mục 3.3).
-2. **Đồng bộ trạng thái ghế real-time giữa Product (catalog tĩnh) và Order (hold/sold):** cách BUYER thấy "ghế nào còn trống" khi xem sơ đồ ghế — cần làm rõ ở P3 khi thiết kế Hold, theo đúng ghi chú đã có sẵn ở roadmap mục 2.
-3. **Sửa sự kiện sau khi đã PUBLISHED và có vé bán:** P2 giả định ADMIN chỉ sửa thông tin không ảnh hưởng vé (mô tả, banner). Sửa giá/số lượng sau khi đã bán vé chưa có quy tắc — để dành nếu phát sinh nhu cầu thật.
-4. **Phân trang & lọc danh sách sự kiện:** P2 chỉ cần phân trang cơ bản; lọc theo thành phố/thời gian/từ khóa có thể bổ sung khi có yêu cầu thật từ frontend.
-5. **Ảnh sự kiện (`banner_image_url`):** P2 chỉ lưu URL (upload file thật — S3/Cloudinary — không nằm trong phạm vi P2, để dành nếu cần).
+1. **Hủy event / thông báo hoàn tiền (FR4):** hướng Kafka đã chốt và producer có trong code. Việc consumer và hoàn tiền thuộc P4; cách phát event sau commit còn là gap (xem audit API).
+2. **Trạng thái ghế real-time:** chưa thuộc P2. Order sở hữu hold/sold; giao tiếp qua `order.seat-status-changed` được thiết kế cho P3, chưa có trong product-service.
+3. **Sửa event đã PUBLISHED:** code hiện cho sửa tên/giá ticket type đã publish, đúng quyết định tạm thời ở API design; phải xem lại trước khi có vé bán ở P3/P4.
+4. **Lọc danh sách event:** code hiện chỉ hỗ trợ phân trang, lọc PUBLISHED và `startAt >= now`; lọc thành phố/thời gian/từ khóa chưa có.
+5. **Ảnh event:** P2 chỉ lưu URL; upload file thật không nằm trong phạm vi.
+6. **Danh sách event cho ADMIN:** UI plan cần xem mọi trạng thái, nhưng API hiện không cung cấp; đây là gap của P2 nếu giữ màn hình quản lý.
 
 ---
 
@@ -269,4 +270,4 @@ sequenceDiagram
 
 ---
 
-*Hết tài liệu thiết kế P2. Bước tiếp theo: xác nhận các quyết định ở mục 1 và backlog mục 6 (đặc biệt #1, #2) → viết `P2_product_api_design.md` (request/response/lỗi/errorCode dải `3xxx` chi tiết từng API) → bắt đầu code `product-service`.*
+*Tài liệu thiết kế ban đầu được giữ để tra cứu quyết định; trạng thái code và công việc còn thiếu được cập nhật trong `P2_product_api_design.md`.*

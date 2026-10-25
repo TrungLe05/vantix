@@ -191,7 +191,7 @@ Nguyên tắc dùng để tách service: **ai sở hữu dữ liệu này**, **t
 3. API BUYER: danh sách sự kiện, chi tiết sự kiện, xem sơ đồ ghế + tình trạng (dữ liệu tĩnh từ Product, **chưa phản ánh hold thời gian thực** — việc đó Order xử lý riêng, cần làm rõ ở P3 cách hai bên đồng bộ tình trạng hiển thị).
 
 **Tài liệu cần sinh ra ở bước sau:**
-- ERD `product_service`.
+- ERD `products_service` (the database name configured by `product-service`).
 - API spec catalog (ADMIN + BUYER).
 
 **Tiêu chí hoàn thành:** ADMIN tạo được một sự kiện có cả sơ đồ ghế và hạng vé GA; BUYER xem được danh sách và chi tiết sự kiện đó.

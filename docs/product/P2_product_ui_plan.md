@@ -30,7 +30,7 @@ Hai nhóm màn hình tách biệt, dùng chung data layer (`lib/api/events.ts`, 
 |---|---|---|---|
 | 4 | Danh sách địa điểm | `/admin/venues` | PR02 |
 | 5 | Tạo địa điểm (modal/dialog, không phải route riêng) | — | PR01 |
-| 6 | Danh sách sự kiện (mọi trạng thái) | `/admin/events` | PR07 **không dùng được** — cần API riêng chỉ-ADMIN để thấy cả DRAFT (xem mục 6, điểm mở) |
+| 6 | Danh sách sự kiện (mọi trạng thái) | `/admin/events` | **Chưa thể đáp ứng với API hiện tại** — PR07 chỉ trả PUBLISHED sắp diễn ra; cần API ADMIN lọc mọi trạng thái hoặc đổi phạm vi UI/P2. |
 | 7 | Tạo sự kiện — wizard nhiều bước | `/admin/events/new` | PR03, PR09, PR10, PR12, PR05 |
 | 8 | Sửa sự kiện | `/admin/events/[eventId]/edit` | PR04, PR13, PR06 |
 
@@ -127,7 +127,7 @@ Form tương tự Bước 1 của wizard, nhưng **disable các field giới h�
 
 ## 6. Điểm mở cần xác nhận
 
-1. **`/admin/events` cần thấy cả event `DRAFT`**, nhưng PR07 chỉ trả `PUBLISHED`. Hai hướng: (a) thêm query param `?status=` vào PR07 cho phép ADMIN xem mọi trạng thái (cần sửa backend), hoặc (b) tạm thời ADMIN chỉ thấy danh sách qua... hiện chưa có API nào khác. Đây là lỗ hổng thật trong kế hoạch, cần quay lại bổ sung ở `P2_product_api_design.md` trước khi code màn hình 6 — **chưa có cách làm nào khả thi với API hiện tại**, phải sửa backend trước.
+1. **Danh sách ADMIN mọi trạng thái** chưa có API. PR07 chỉ trả PUBLISHED sắp diễn ra và công khai; không dùng endpoint này để giả lập trang quản trị. Chọn một trong hai hướng khi triển khai: thêm API chỉ ADMIN (đề xuất để giữ đúng UI plan), hoặc bỏ màn hình quản lý danh sách khỏi phạm vi P2.
 2. **Form nhập nhanh "Rows A-C, 8 seats/row" ở Bước 2 wizard** là tôi tự đề xuất để giảm thao tác — không có trong mockup gốc, cần bạn duyệt trước khi code.
 
 ---

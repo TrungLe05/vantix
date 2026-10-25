@@ -15,6 +15,7 @@ public class UpdateEventRequest {
     private UUID venueId;
 
     @Size(max = 200)
+    @Pattern(regexp = "(?s).*\\S.*", message = "name không được để trống")
     private String name;
 
     @Size(max = 2000)

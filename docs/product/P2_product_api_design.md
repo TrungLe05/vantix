@@ -1,6 +1,6 @@
 # Vantix — Phase 2: Product — API Design
 
-> **Trạng thái:** Đã đối chiếu với implementation trong `backend/services/product-service` (25/10/2026). P2 **chưa hoàn thiện**; xem mục “Kết quả audit implementation” bên dưới. Nội dung hợp đồng API được cập nhật theo code hiện tại; các sai lệch còn tồn tại được ghi rõ, không coi là đã hoàn thành.
+> **Trạng thái:** Đã đối chiếu và cập nhật implementation trong `backend/services/product-service` (25/10/2026). Các mục điều chỉnh 1–4 đã hoàn thành; P2 vẫn còn việc bootstrap database và bổ sung test, xem mục “Kết quả audit implementation”.
 > **Liên quan:** `P2_product_design.md` (quyết định chốt, vòng đời Event, use case, ERD, sequence), `P1_auth_api_design.md` (quy ước chung dùng lại), `00_roadmap_phases_v1.md` (mục P2)
 > **Phạm vi:** toàn bộ API của `product-service` trong P2 (Venue, Event, SeatMap/Seat, TicketType). Mỗi API mô tả: request, response, lỗi (HTTP status + errorCode), các bước thực thi.
 
@@ -8,11 +8,11 @@
 
 | Hạng mục | Trạng thái theo code | Ghi chú |
 |---|---|---|
-| PR01–PR13 | Đã có controller/service/repository tương ứng | Các route được khai báo; chưa có test tự động của product-service trong repository. |
-| PR05 — publish | Chưa đủ điều kiện thời gian | Hàm publish chỉ kiểm tra hạng vé và ghế; không xác thực lại `startAt`/sales window như mục 5.3 của tài liệu thiết kế. |
-| PR06 — cancel + Kafka | Có publish event, nhưng sai thời điểm so với hợp đồng | `kafkaTemplate.send` được gọi bên trong transaction; code chưa bảo đảm gửi sau khi DB commit như mô tả ở mục 4.3. |
-| Danh sách ADMIN | Chưa triển khai | PR07 chỉ trả PUBLISHED và event chưa diễn ra. UI plan cần ADMIN xem DRAFT/mọi trạng thái nhưng hiện không có API đáp ứng. |
-| Validation tên khi PATCH | Chưa đủ | `UpdateEventRequest.name` và `UpdateTicketTypeRequest.name` chỉ giới hạn độ dài, không từ chối chuỗi rỗng/toàn khoảng trắng; service trim và vẫn lưu được chuỗi rỗng. |
+| PR01–PR14 | Đã có controller/service/repository tương ứng | Đã bổ sung PR14 cho danh sách quản trị; chưa có test tự động của product-service trong repository. |
+| PR05 — publish | Đã bổ sung kiểm tra thời gian | Thời gian diễn ra và sales window được gom chung với các lý do publish khác theo error 3105. |
+| PR06 — cancel + Kafka | Đã phát sau DB commit | Gửi Kafka được đăng ký trong `TransactionSynchronization.afterCommit`; lỗi gửi được log và không làm rollback DB. |
+| Danh sách ADMIN | Đã triển khai PR14 | Phân trang, lọc tùy chọn theo `DRAFT`/`PUBLISHED`/`CANCELLED`; chỉ ADMIN được gọi. |
+| Validation tên khi PATCH | Đã bổ sung | `name` nếu được gửi phải chứa ít nhất một ký tự không phải khoảng trắng; bỏ field vẫn hợp lệ với PATCH. |
 | Tên database/bootstrap | Cấu hình code là `products_service` | Docs đã được đồng bộ theo code; Compose hiện chưa tạo database này tường minh, vì vậy cần provision `products_service` trước khi Flyway chạy. |
 | Tests | Chưa có | Không tìm thấy test trong module `product-service`; vì vậy chưa có bằng chứng tự động cho các luồng và điều kiện lỗi. |
 
@@ -23,15 +23,12 @@
 - Schema Flyway, seed events; giới hạn truy cập ghi cho ADMIN, đọc công khai; lỗi nghiệp vụ tập trung theo `ApiResponse`.
 - PR07 lọc `PUBLISHED` có `startAt >= now`, sắp xếp tăng theo thời gian. PR13 cho phép đổi tên/giá cả khi event đã PUBLISHED. Đây là hành vi đang chạy trong code.
 
-### Việc còn thiếu để kết luận P2 hoàn thành
+### Việc còn thiếu để kết luận P2 hoàn thành (ngoài scope điều chỉnh hiện tại)
 
-1. Bổ sung validate thời gian khi publish và xác thực trường PATCH `name` không rỗng.
-2. Chuyển phát Kafka cancellation sang sau commit (hoặc cơ chế bền vững tương đương) để sự kiện không được phát nếu transaction DB rollback.
-3. Bổ sung API danh sách ADMIN có thể truy vấn DRAFT/PUBLISHED/CANCELLED, hoặc sửa UI plan nếu P2 không yêu cầu màn hình quản lý danh sách event.
-4. Bổ sung tạo database `products_service` trong compose/bootstrap; hiện runtime có rủi ro Flyway kết nối tới DB không tồn tại.
-5. Bổ sung test cho các luồng chính và các validation nêu trên.
+1. Bổ sung tạo database `products_service` trong compose/bootstrap; hiện runtime có rủi ro Flyway kết nối tới DB không tồn tại.
+2. Bổ sung test cho các luồng chính và các validation nêu trên.
 
-Các điểm #1–#5 là gap implementation; không được hiểu là đã hoàn thành chỉ vì API được liệt kê ở bảng PR.
+Hai việc này vẫn là gap implementation; không được hiểu là đã hoàn thành chỉ vì API được liệt kê ở bảng PR.
 
 ---
 
@@ -54,7 +51,7 @@ Cả hai cùng một họ giải pháp (Kafka đồng bộ trạng thái giữa 
 - **Ngày giờ**: `java.time.Instant`, ISO-8601 UTC trong JSON (theo quy ước đã chốt toàn dự án).
 - **Phân quyền ghi**: `@PreAuthorize("hasRole('ADMIN')")` ở tầng service/controller (không chặn bằng URL matcher ở `SecurityConfig`) — lý do giống hệt A14 ở P1: lỗi 403 từ filter chain không đi qua `GlobalExceptionHandler` nên sai format JSON.
 - **Trust-The-Gateway**: đọc `X-User-Id`/`X-User-Role` do Gateway inject, không tự verify JWT.
-- **Gateway route công khai cần thêm**: mọi `GET` liệt kê ở mục 3 (xem bảng mục 2) phải được thêm vào `app.gateway.public-endpoints` của `api-gateway`, path khai `/api/venues`, `/api/events`, `/api/events/*/seat-map` (wildcard vì có path variable).
+- **Gateway route công khai cần thêm**: các GET công khai PR02, PR07, PR08, PR11 phải được thêm vào `app.gateway.public-endpoints` của `api-gateway`, path khai `/api/venues`, `/api/events`, `/api/events/*`, `/api/events/*/seat-map`. PR14 là route ADMIN, không khai báo công khai.
 
 ---
 
@@ -75,6 +72,7 @@ Cả hai cùng một họ giải pháp (Kafka đồng bộ trạng thái giữa 
 | PR11 | GET | `/api/events/{id}/seat-map` | Công khai | Xem sơ đồ ghế + hạng vé từng ghế |
 | PR12 | POST | `/api/events/{id}/ticket-types` | ADMIN | Tạo hạng vé (SEATED gán seatIds, hoặc GA kèm totalQuantity) |
 | PR13 | PATCH | `/api/ticket-types/{id}` | ADMIN | Sửa `name`/`price` |
+| PR14 | GET | `/api/events/admin/list` | ADMIN | Danh sách mọi trạng thái, phân trang, lọc trạng thái tùy chọn |
 
 ---
 
@@ -299,7 +297,7 @@ Không phân trang; mảng rỗng nếu chưa có venue nào. Không có lỗi n
 | 404 | 3101 | Event không tồn tại |
 | 409 | 3104 | Event đã `PUBLISHED` |
 | 409 | 3103 | Event đã `CANCELLED` |
-| 400 | 3105 | Không đạt điều kiện publish — xem bước 4 |
+| 400 | 3105 | Không đạt điều kiện publish — xem bước 3 |
 | 403 | 1004 | Role không phải ADMIN |
 
 **Response 400 mẫu (3105)**
@@ -317,6 +315,8 @@ Không phân trang; mảng rỗng nếu chưa có venue nào. Không có lỗi n
 1. Tải event → không có → `3101`; `PUBLISHED` → `3104`; `CANCELLED` → `3103`.
 2. Gom toàn bộ lý do không đạt (không dừng ở lý do đầu tiên, để ADMIN thấy hết trong một lần gọi):
    - Chưa có `TicketType` nào.
+   - `startAt` không còn ở tương lai, hoặc `endAt <= startAt`.
+   - Sales window không hợp lệ: `salesStartAt >= salesEndAt` khi cả hai có giá trị, hoặc `salesEndAt > startAt`.
    - Có `TicketType` SEATED nhưng `totalQuantity = 0` (không có ghế nào gán).
    - Còn `Seat` nào trong `SeatMap` của event có `ticket_type_id IS NULL`.
    - Có `TicketType` GENERAL_ADMISSION với `totalQuantity <= 0` (về lý thuyết không xảy ra vì đã chặn ở PR12, nhưng kiểm tra lại cho chắc).
@@ -397,6 +397,24 @@ Chỉ trả event `status = PUBLISHED` **và** `startAt >= now` (ẩn sự kiệ
 | HTTP | errorCode | Điều kiện |
 |---|---|---|
 | 400 | 1001 | `page < 0` hoặc `size` ngoài `1–100` |
+
+---
+
+### PR14 — Danh sách sự kiện cho ADMIN
+
+`GET /api/events/admin/list` · ADMIN
+
+**Query params**
+
+| Param | Kiểu | Mặc định | Validation |
+|---|---|---|---|
+| `status` | `DRAFT` / `PUBLISHED` / `CANCELLED` | Không lọc | Nếu bỏ qua, trả mọi trạng thái |
+| `page` | int | 0 | `>= 0` |
+| `size` | int | 20 | `1–100` |
+
+Kết quả sắp xếp theo `startAt` tăng dần. Response dùng chung `PageResponse<EventSummaryResponse>` của PR07 để giao diện quản trị nhận `status`, `minPrice` và venue summary.
+
+**Lỗi:** `400 / 1001` nếu tham số phân trang không hợp lệ hoặc `status` không thuộc enum; `403 / 1004` nếu role không phải ADMIN.
 
 ---
 

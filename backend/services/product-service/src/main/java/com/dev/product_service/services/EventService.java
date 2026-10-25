@@ -22,6 +22,9 @@ public interface EventService {
     /** PR07 — Danh sách PUBLISHED phân trang, chỉ event chưa diễn ra. */
     PageResponse<EventSummaryResponse> getPublishedList(int page, int size);
 
+    /** PR14 — Danh sách event dành cho ADMIN, có thể lọc trạng thái. */
+    PageResponse<EventSummaryResponse> getAdminList(String status, int page, int size);
+
     /** PR08 — Chi tiết event (PUBLISHED hoặc CANCELLED), ẩn DRAFT bằng cùng lỗi NOT_FOUND. */
     EventDetailResponse getDetail(UUID eventId);
 }

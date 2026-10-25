@@ -1,6 +1,7 @@
 package com.dev.product_service.services;
 
 import com.dev.commonlib_api_response.exception.AppException;
+import com.dev.commonlib_api_response.exception.CommonErrorCode;
 import com.dev.commonlib_kafka.event.EventCancelledEvent;
 import com.dev.commonlib_kafka.topic.KafkaTopics;
 import com.dev.product_service.dto.request.CreateEventRequest;
@@ -22,13 +23,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Slf4j
@@ -172,6 +177,21 @@ public class EventServiceImpl implements EventService {
     private List<String> validatePublishConditions(Event event) {
         List<String> reasons = new ArrayList<>();
 
+        Instant now = Instant.now();
+        if (!event.getStartAt().isAfter(now)) {
+            reasons.add("Thời gian bắt đầu sự kiện phải ở tương lai");
+        }
+        if (!event.getEndAt().isAfter(event.getStartAt())) {
+            reasons.add("Thời gian kết thúc phải sau thời gian bắt đầu");
+        }
+        if (event.getSalesStartAt() != null && event.getSalesEndAt() != null
+                && !event.getSalesStartAt().isBefore(event.getSalesEndAt())) {
+            reasons.add("Thời gian mở bán phải trước thời gian kết thúc mở bán");
+        }
+        if (event.getSalesEndAt() != null && event.getSalesEndAt().isAfter(event.getStartAt())) {
+            reasons.add("Thời gian kết thúc mở bán phải trước hoặc bằng thời gian bắt đầu sự kiện");
+        }
+
         List<TicketType> ticketTypes = ticketTypeRepository.findByEventId(event.getId());
 
         if (ticketTypes.isEmpty()) {
@@ -222,16 +242,24 @@ public class EventServiceImpl implements EventService {
         event.setStatus(EventStatus.CANCELLED);
         EventResponse response = buildResponse(eventRepository.save(event));
 
-        // Publish Kafka SAU KHI transaction commit — lỗi publish chỉ log, không rollback,
-        // không trả lỗi cho ADMIN (theo P2_product_api_design.md mục 4 điểm 3).
-        // Ở P2 chưa có consumer, topic này sẽ được order-service consume ở P4.
-        kafkaTemplate.send(
-                KafkaTopics.PRODUCT_EVENT_CANCELLED,
-                event.getId().toString(), // key = eventId: đảm bảo ordering nếu có nhiều event
-                new EventCancelledEvent(event.getId(), cancelledAt)
-        ).whenComplete((result, ex) -> {
-            if (ex != null) {
-                log.error("Publish product.event-cancelled thất bại, eventId={}", event.getId(), ex);
+        UUID cancelledEventId = event.getId();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                // Chỉ phát sau commit để consumer không nhận trạng thái hủy chưa được lưu.
+                try {
+                    kafkaTemplate.send(
+                            KafkaTopics.PRODUCT_EVENT_CANCELLED,
+                            cancelledEventId.toString(),
+                            new EventCancelledEvent(cancelledEventId, cancelledAt)
+                    ).whenComplete((result, ex) -> {
+                        if (ex != null) {
+                            log.error("Publish product.event-cancelled thất bại, eventId={}", cancelledEventId, ex);
+                        }
+                    });
+                } catch (RuntimeException ex) {
+                    log.error("Không thể gửi product.event-cancelled, eventId={}", cancelledEventId, ex);
+                }
             }
         });
 
@@ -262,6 +290,39 @@ public class EventServiceImpl implements EventService {
                 .totalElements(eventPage.getTotalElements())
                 .totalPages(eventPage.getTotalPages())
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<EventSummaryResponse> getAdminList(String status, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "startAt"));
+        EventStatus eventStatus = parseEventStatus(status);
+        Page<Event> eventPage = eventStatus == null
+                ? eventRepository.findAll(pageable)
+                : eventRepository.findByStatus(eventStatus, pageable);
+
+        List<EventSummaryResponse> content = eventPage.getContent().stream()
+                .map(this::buildSummaryResponse)
+                .toList();
+
+        return PageResponse.<EventSummaryResponse>builder()
+                .content(content)
+                .page(eventPage.getNumber())
+                .size(eventPage.getSize())
+                .totalElements(eventPage.getTotalElements())
+                .totalPages(eventPage.getTotalPages())
+                .build();
+    }
+
+    private EventStatus parseEventStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return EventStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new AppException(CommonErrorCode.VALIDATION_FAILED);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -39,14 +39,12 @@ function AuthHydrator({ children }: { children: React.ReactNode }) {
         setSession(auth.accessToken, user);
       })
       .catch(() => {
-        // Không có cookie hợp
-        // lệ (chưa đăng nhập, hoặc đã hết hạn) — coi như khách vãng lai, không phải lỗi
+        // Missing or expired cookies mean the visitor is signed out, not that the app failed.
       })
       .finally(() => setHydrated());
   }, [setHydrated, setSession]);
 
-  // Chặn render children cho tới khi biết chắc trạng thái đăng nhập — tránh nháy UI
-  // "chưa đăng nhập" rồi mới nhảy sang "đã đăng nhập" ngay sau đó
+  // Wait for the auth state before rendering children to avoid a signed-out flash before refresh completes.
   if (!isHydrated) return null;
 
   return <>{children}</>;

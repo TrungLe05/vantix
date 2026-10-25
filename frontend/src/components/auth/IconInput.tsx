@@ -15,8 +15,12 @@ export const IconInput = forwardRef<HTMLInputElement, IconInputProps>(
       <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
         {icon}
       </span>
-      <Input ref={ref} className={`pl-11 ${className ?? ""}`} {...props} />
+      <Input
+        ref={ref}
+        className={`pl-11 rounded-lg ${className ?? ""}`}
+        {...props}
+      />
     </div>
-  )
+  ),
 );
 IconInput.displayName = "IconInput";

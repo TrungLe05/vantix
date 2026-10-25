@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { getErrorMessage } from "@/lib/api/client";
 import { requestPasswordReset, resetPassword } from "@/lib/api/auth";
 
-const passwordSchema = z.string().min(8, "Mật khẩu cần ít nhất 8 ký tự").regex(/^(?=.*[A-Za-z])(?=.*\d).+$/, "Mật khẩu cần có cả chữ cái và chữ số");
+const passwordSchema = z.string().min(8, "Password must contain at least 8 characters").regex(/^(?=.*[A-Za-z])(?=.*\d).+$/, "Password must contain both letters and numbers");
 
 function ResetPasswordForm() {
   const params = useSearchParams();
@@ -34,24 +34,24 @@ function ResetPasswordForm() {
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const result = passwordSchema.safeParse(password);
-    if (!result.success) { setPasswordError(result.error.issues[0]?.message ?? "Mật khẩu không hợp lệ"); return; }
+    if (!result.success) { setPasswordError(result.error.issues[0]?.message ?? "Invalid password"); return; }
     setPasswordError("");
     mutation.mutate();
   };
 
   return <AuthCard>
-    <h1 className="font-heading text-2xl font-bold tracking-tight">Kiểm tra email</h1>
-    <p className="mt-2 text-sm leading-6 text-muted-foreground">Mã đặt lại gồm 6 chữ số đã được gửi đến <span className="font-medium text-foreground">{email || "email của bạn"}</span>.</p>
-    {!email ? <p role="alert" className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">Thiếu email. Hãy bắt đầu lại từ trang quên mật khẩu.</p> : null}
+    <h1 className="font-heading text-2xl font-bold tracking-tight">Check your email</h1>
+    <p className="mt-2 text-sm leading-6 text-muted-foreground">A 6-digit reset code was sent to <span className="font-medium text-foreground">{email || "your email"}</span>.</p>
+    {!email ? <p role="alert" className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">Email address is missing. Start again from the forgot password page.</p> : null}
     <form onSubmit={submit} className="mt-7 space-y-6">
       <OtpInput value={otp} onChange={setOtp} />
-      <div><Label htmlFor="new-password" className="mb-2 block font-semibold">Mật khẩu mới</Label><PasswordInput id="new-password" autoComplete="new-password" placeholder="Ít nhất 8 ký tự" value={password} onChange={(event) => setPassword(event.target.value)} /><p className="mt-2 text-xs text-muted-foreground">Cần có ít nhất 8 ký tự, gồm chữ cái và chữ số.</p>{passwordError ? <p role="alert" className="mt-1 text-sm text-destructive">{passwordError}</p> : null}</div>
+      <div><Label htmlFor="new-password" className="mb-2 block font-semibold">New password</Label><PasswordInput id="new-password" autoComplete="new-password" placeholder="At least 8 characters" value={password} onChange={(event) => setPassword(event.target.value)} /><p className="mt-2 text-xs text-muted-foreground">Use at least 8 characters, including letters and numbers.</p>{passwordError ? <p role="alert" className="mt-1 text-sm text-destructive">{passwordError}</p> : null}</div>
       {mutation.isError ? <p role="alert" className="text-sm text-destructive">{getErrorMessage(mutation.error)}</p> : null}
-      <Button type="submit" className="w-full" disabled={!email || otp.length !== 6 || mutation.isPending}>{mutation.isPending ? "Đang cập nhật…" : "Đặt lại mật khẩu"}</Button>
+      <Button type="submit" className="w-full" disabled={!email || otp.length !== 6 || mutation.isPending}>{mutation.isPending ? "Updating…" : "Reset password"}</Button>
     </form>
-    <div className="mt-6 text-center text-sm"><span className="text-muted-foreground">Chưa nhận được mã? </span><button type="button" disabled={!email || secondsLeft > 0 || resend.isPending} onClick={() => resend.mutate()} className="font-semibold text-primary disabled:cursor-not-allowed disabled:text-muted-foreground">{resend.isPending ? "Đang gửi…" : "Gửi lại"}</button>{secondsLeft > 0 ? <span className="ml-1 text-xs text-muted-foreground">({secondsLeft}s)</span> : null}</div>
+    <div className="mt-6 text-center text-sm"><span className="text-muted-foreground">Didn’t receive a code? </span><button type="button" disabled={!email || secondsLeft > 0 || resend.isPending} onClick={() => resend.mutate()} className="font-semibold text-primary disabled:cursor-not-allowed disabled:text-muted-foreground">{resend.isPending ? "Sending…" : "Resend"}</button>{secondsLeft > 0 ? <span className="ml-1 text-xs text-muted-foreground">({secondsLeft}s)</span> : null}</div>
     {resend.isError ? <p role="alert" className="mt-2 text-center text-sm text-destructive">{getErrorMessage(resend.error)}</p> : null}
-    <Link href="/login" className="mt-6 inline-flex items-center gap-2 border-t border-border pt-5 text-sm font-semibold text-primary"><ArrowLeft aria-hidden="true" className="size-4" />Quay lại đăng nhập</Link>
+    <Link href="/login" className="mt-6 inline-flex items-center gap-2 border-t border-border pt-5 text-sm font-semibold text-primary"><ArrowLeft aria-hidden="true" className="size-4" />Back to log in</Link>
   </AuthCard>;
 }
 

@@ -430,7 +430,7 @@ Do Spring Security (`OAuth2LoginAuthenticationFilter`) xử lý, sau đó gọi 
 
 **Request body:** `{ "code": "<one-time-code>" }` (mục 1.5)
 
-**Response 200:** giống A04 (body dạng `{auth, user}`, kèm `Set-Cookie: refreshToken=…`).
+**Response 200:** body dạng `{auth, user, isNewUser}`, kèm `Set-Cookie: refreshToken=…`. `isNewUser=true` chỉ khi callback Google vừa tạo user mới vì email chưa tồn tại; tài khoản đã tồn tại hoặc được liên kết trả `false`. Các endpoint login/refresh luôn trả `false`.
 
 **Lỗi**
 
@@ -446,7 +446,7 @@ Do Spring Security (`OAuth2LoginAuthenticationFilter`) xử lý, sau đó gọi 
 1. Validate.
 2. `GETDEL oauth:code:{code}` (đọc và xóa nguyên tử, chỉ dùng được đúng một lần) → không có → `2506`.
 3. Tải user theo `userId`: không còn → `2601`; `LOCKED` → `2103`.
-4. Phát hành token với `family_id` mới (giống bước 5–6 của A04). Trả 200.
+4. Phát hành token với `family_id` mới (giống bước 5–6 của A04), đồng thời trả cờ `isNewUser` đã được xác định lúc xử lý callback Google. Trả 200.
 
 ---
 

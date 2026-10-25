@@ -106,7 +106,7 @@ Trang **trung gian, không có UI tương tác** — chỉ hiện spinner "Đang
 **Hành vi:**
 - Đọc query param `code` hoặc `error` (do A06 redirect về).
 - Có `error` → hiển thị thông báo lỗi tương ứng (đọc `message` tĩnh theo mã, vì đây là lỗi nằm trên URL chứ không phải response API — xem bảng mã ở `P1_auth_api_design.md` mục A06), rồi `router.push("/login")` sau vài giây.
-- Có `code` → gọi `POST /auth/oauth2/exchange {code}`. `onSuccess` → giống luồng login (kiểm tra `mcp`, điều hướng Home hoặc Change Password). `onError` (ví dụ `2506` code hết hạn do người dùng back/refresh trang này) → thông báo lỗi, `router.push("/login")`.
+- Có `code` → gọi `POST /auth/oauth2/exchange {code}`. `onSuccess`: kiểm tra `mcp`; tài khoản Google mới (`isNewUser=true`) thấy màn hình chào mừng một lần rồi vào Home, tài khoản đã tồn tại đi thẳng Home sau trạng thái loading. `onError` (ví dụ `2506` code hết hạn do người dùng back/refresh trang này) → thông báo lỗi, `router.push("/login")`.
 - **Bẫy cần tránh:** `useEffect` gọi exchange phải chạy **đúng một lần** (dependency array rỗng `[]`, hoặc dùng ref chặn gọi lại) — React Strict Mode ở dev gọi `useEffect` 2 lần, và vì `code` dùng một lần duy nhất (TTL 60s, xóa khỏi Redis ngay khi dùng), gọi lần 2 sẽ luôn nhận `2506` dù lần 1 đã thành công.
 
 ### 4.6 Change Password — bắt buộc (`/change-password`)

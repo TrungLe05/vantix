@@ -5,7 +5,7 @@ import type { UserResponse } from "@/types/auth";
 interface AuthState {
   accessToken: string | null;
   user: UserResponse | null;
-  isHydrated: boolean; // true sau khi silent refresh lúc load trang chạy xong (dù thành công hay thất bại)
+  isHydrated: boolean; // True after the silent refresh on page load finishes, whether it succeeds or fails.
   setSession: (accessToken: string, user: UserResponse) => void;
   setHydrated: () => void;
   clear: () => void;

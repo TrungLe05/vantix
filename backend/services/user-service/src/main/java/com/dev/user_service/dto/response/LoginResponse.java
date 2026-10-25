@@ -9,4 +9,5 @@ import lombok.Getter;
 public class LoginResponse {
     private AuthResponse auth;
     private UserResponse user;
+    private Boolean isNewUser;
 }

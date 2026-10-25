@@ -17,7 +17,7 @@ export async function exchangeOAuthCode(code: string) {
     { code },
   );
   if (!res.data.result) {
-    throw new Error("Không nhận được phiên đăng nhập Google");
+    throw new Error("Could not retrieve the Google sign-in session");
   }
   return res.data.result;
 }
@@ -29,7 +29,7 @@ export async function logout() {
 export async function getCurrentUser() {
   const res = await apiClient.get<ApiResponse<UserResponse>>("/users/me");
   if (!res.data.result) {
-    throw new Error("Không nhận được thông tin tài khoản");
+    throw new Error("Could not retrieve account information");
   }
   return res.data.result;
 }

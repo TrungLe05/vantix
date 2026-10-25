@@ -84,6 +84,18 @@ public class EventController {
                 .build();
     }
 
+    // ── PR14 ── Danh sách sự kiện cho ADMIN ──────────────────────────────────
+    @GetMapping("/admin/list")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<PageResponse<EventSummaryResponse>> getAdminList(
+            @RequestParam(required = false, name = "status") String status,
+            @RequestParam(defaultValue = "0", name = "page") @Min(0) int page,
+            @RequestParam(defaultValue = "20", name = "size") @Min(1) @Max(100) int size
+    ) {
+        PageResponse<EventSummaryResponse> result = eventService.getAdminList(status, page, size);
+        return ApiResponse.<PageResponse<EventSummaryResponse>>builder().result(result).build();
+    }
+
     // ── PR08 ── Chi tiết sự kiện (PUBLISHED hoặc CANCELLED, công khai) ───────
     @GetMapping("/{id}")
     public ApiResponse<EventDetailResponse> getDetail(@PathVariable("id") UUID id) {

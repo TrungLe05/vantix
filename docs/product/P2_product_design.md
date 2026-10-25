@@ -36,8 +36,8 @@ stateDiagram-v2
 ```
 
 - **DRAFT**: BUYER không thấy (API danh sách chỉ trả `PUBLISHED`). ADMIN tự do thêm/sửa/xóa sơ đồ ghế và hạng vé.
-- **PUBLISHED**: BUYER thấy trong catalog (ở P3 có thể mua). Thiết kế yêu cầu publish kiểm tra thời gian và hạng vé. Code hiện kiểm tra hạng vé/ghế nhưng **chưa kiểm tra lại thời gian** tại thời điểm publish.
-- **CANCELLED**: BUYER vẫn xem được (để biết sự kiện đã hủy) nhưng không mua được. Quyết định đã chốt ở API design: Product phát Kafka `product.event-cancelled`; P2 chỉ có producer, consumer thuộc Order/Payment ở P4. Code hiện gửi Kafka bên trong transaction nên chưa bảo đảm thứ tự sau DB commit.
+- **PUBLISHED**: BUYER thấy trong catalog (ở P3 có thể mua). Khi publish, code kiểm tra thời gian diễn ra, sales window, hạng vé và ghế; các lý do không đạt được trả cùng error 3105.
+- **CANCELLED**: BUYER vẫn xem được (để biết sự kiện đã hủy) nhưng không mua được. Product phát Kafka `product.event-cancelled` sau khi transaction đổi trạng thái đã commit; consumer/hoàn tiền thuộc Order/Payment ở P4.
 - P2 **không** có trạng thái sự kiện đã diễn ra xong (`COMPLETED`) — để dành giai đoạn sau nếu cần phân biệt hiển thị.
 
 ---
@@ -246,7 +246,7 @@ sequenceDiagram
 3. **Sửa event đã PUBLISHED:** code hiện cho sửa tên/giá ticket type đã publish, đúng quyết định tạm thời ở API design; phải xem lại trước khi có vé bán ở P3/P4.
 4. **Lọc danh sách event:** code hiện chỉ hỗ trợ phân trang, lọc PUBLISHED và `startAt >= now`; lọc thành phố/thời gian/từ khóa chưa có.
 5. **Ảnh event:** P2 chỉ lưu URL; upload file thật không nằm trong phạm vi.
-6. **Danh sách event cho ADMIN:** UI plan cần xem mọi trạng thái, nhưng API hiện không cung cấp; đây là gap của P2 nếu giữ màn hình quản lý.
+6. **Danh sách event cho ADMIN:** PR14 đã bổ sung API phân trang, lọc trạng thái để đáp ứng màn hình quản trị.
 
 ---
 

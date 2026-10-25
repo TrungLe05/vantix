@@ -22,6 +22,8 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
             EventStatus status, Instant now, Pageable pageable
     );
 
+    Page<Event> findByStatus(EventStatus status, Pageable pageable);
+
     /**
      * PR08: Tìm event theo id khi status KHÔNG phải DRAFT — dùng để ẩn event DRAFT
      * khỏi API công khai (trả cùng lỗi 3101 EVENT_NOT_FOUND dù id đúng hay event đang DRAFT).

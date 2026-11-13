@@ -258,12 +258,12 @@ Ghi chú Gateway: route công khai là A01–A08, A10, A11 (khai theo cặp `MET
 1. Validate; chuẩn hóa email.
 2. Tìm user theo email → không có → `2301` (cùng lỗi với OTP sai để không lộ email có tồn tại).
 3. `status = ACTIVE` → `2002`; `status = LOCKED` → `2103`.
-4. Đọc `otp:EMAIL_VERIFICATION:{userId}` từ Redis:
+4–5. Kiểm tra OTP bằng **một Lua script** trên `otp:EMAIL_VERIFICATION:{userId}` (nguyên tử phía Redis, nên N request song song không làm mất lượt đếm sai và mã đúng chỉ qua được một lần):
    - Không có key → `2301`.
    - `attemptCount ≥ 5` → `2303`.
-5. So khớp hash OTP bằng so sánh **constant-time** (`MessageDigest.isEqual`).
-   - Sai → tăng `attemptCount` và ghi lại **giữ nguyên TTL còn lại** (nếu đặt lại TTL đầy đủ, việc nhập sai liên tục sẽ tự gia hạn OTP vô thời hạn) → `2301`.
+   - So khớp HMAC của mã nhập với hash lưu trữ. Sai → tăng `attemptCount`, ghi lại bằng `SET … KEEPTTL` (**giữ nguyên TTL còn lại**; nếu đặt lại TTL đầy đủ, việc nhập sai liên tục sẽ tự gia hạn OTP vô thời hạn) → `2301`.
    - Đúng → xóa key OTP (dùng một lần).
+   - So sánh trong Lua không constant-time; chấp nhận được vì hai vế đều là HMAC tính phía server, kẻ tấn công không biết secret.
 6. Trong một transaction: cập nhật `users.status = ACTIVE`.
 7. Trả 200 (không tự đăng nhập, không trả token).
 
@@ -291,7 +291,7 @@ Ghi chú Gateway: route công khai là A01–A08, A10, A11 (khai theo cặp `MET
 
 1. Validate; chuẩn hóa email.
 2. Tìm user; **chỉ tiếp tục nếu tồn tại và `status = PENDING_VERIFICATION`**, ngược lại trả 200 im lặng.
-3. Cooldown: nếu tồn tại khóa `otp:cooldown:EMAIL_VERIFICATION:{userId}` → trả 200 im lặng, không gửi thêm (trả 429 sẽ làm lộ email tồn tại; frontend tự đếm ngược 60s ở nút "Gửi lại").
+3. Cooldown: chiếm khóa `otp:cooldown:EMAIL_VERIFICATION:{userId}` bằng `SET NX EX 60` (nguyên tử: hai request gửi lại song song chỉ một request sinh OTP). Không chiếm được → trả 200 im lặng, không gửi thêm (trả 429 sẽ làm lộ email tồn tại; frontend tự đếm ngược 60s ở nút "Gửi lại").
 4. Sinh OTP mới. Việc ghi khóa OTP **ghi đè OTP cũ** nên không cần bước vô hiệu hóa riêng; đồng thời đặt lại khóa cooldown 60 giây.
 5. Publish `user.email-verification-requested`.
 6. Trả 200. (Không có lệnh ghi DB nên không cần transaction.)
@@ -532,7 +532,7 @@ Set-Cookie: refreshToken=; Path=/api/auth; Max-Age=0; HttpOnly; SameSite=Lax
 
 1. Validate; chuẩn hóa email.
 2. Chỉ tiếp tục nếu user tồn tại và `status = ACTIVE`; ngược lại (không tồn tại / `PENDING_VERIFICATION` / `LOCKED`) trả 200 im lặng.
-3. Cooldown: nếu tồn tại khóa `otp:cooldown:FORGOT_PASSWORD:{userId}` → trả 200 im lặng.
+3. Cooldown: chiếm khóa `otp:cooldown:FORGOT_PASSWORD:{userId}` bằng `SET NX EX 60`; không chiếm được → trả 200 im lặng.
 4. Sinh OTP `FORGOT_PASSWORD` (ghi đè OTP cũ nếu còn, đặt cooldown 60 giây).
 5. Publish `user.forgot-password-requested`.
 6. Trả 200.
@@ -802,7 +802,7 @@ Chỉ dùng cho dev: không commit mật khẩu thật vào file cấu hình (l�
 1. **Access token còn hiệu lực đến hết TTL** sau logout hoặc đổi mật khẩu (Gateway verify stateless, không tra DB). Chấp nhận ở P1.
 2. **Chưa có rate limiting / khóa tài khoản** khi sai mật khẩu nhiều lần (thuộc P9). OTP thì có giới hạn 5 lần.
 3. **Kafka không dùng outbox:** mất event nếu Kafka lỗi ngay sau commit; lối thoát là `resend-verification` / `forgot-password`.
-4. **OTP ở Redis không được xử lý nguyên tử:** bộ đếm sai và bước "kiểm tra rồi xóa" là đọc-rồi-ghi, nên dưới tải đồng thời số lần đoán thực tế có thể vượt 5 một chút, và hai request đúng OTP cùng lúc đều có thể qua. Đủ cho mức P1; nếu cần siết thì chuyển sang `INCR`/Lua script. Ngoài ra không phân biệt được "hết hạn" với "chưa từng có" (mục 0 điểm 3).
+4. ~~OTP ở Redis không được xử lý nguyên tử~~ — đã sửa (13/11/2026): kiểm tra OTP chạy trong một Lua script, cooldown dùng `SET NX`; có integration test song song (`OtpServiceIntegrationTest`). Vẫn không phân biệt được "hết hạn" với "chưa từng có" (mục 0 điểm 3).
 5. **Chưa thu thập device fingerprint** (cột `device_fingerprint_hash` để NULL) — thuộc P6/P8.
 6. **Trust-The-Gateway:** cổng của service không được expose trực tiếp; siết ở P9.
 7. **Cookie khác domain:** khi frontend và backend khác domain cần `SameSite=None` + `Secure` (HTTPS kể cả dev).

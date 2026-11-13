@@ -100,6 +100,25 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # Integration test dùng Postgres/Redis thật (D21), cùng image với docker-compose.yml
+    services:
+      postgres:
+        image: postgres:14-alpine3.23
+        env:
+          POSTGRES_USER: vantix_test
+          POSTGRES_PASSWORD: vantix_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vantix_test -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:alpine3.23
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -112,7 +131,12 @@ jobs:
           cache: maven
           cache-dependency-path: "backend/**/pom.xml"
 
-      # runner ubuntu-latest có sẵn Docker nên Testcontainers chạy được ở bước verify
+      - name: Tạo database cho integration test
+        working-directory: .
+        env:
+          PGPASSWORD: vantix_test
+        run: psql -v ON_ERROR_STOP=1 -h localhost -U vantix_test -d postgres -f docker/postgres/test/create-test-databases.sql
+
       - name: Build and run tests
         run: mvn --batch-mode --no-transfer-progress clean verify
 

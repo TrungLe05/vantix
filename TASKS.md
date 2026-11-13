@@ -22,12 +22,12 @@ Trạng thái: `TODO` · `IN_PROGRESS` · `IN_REVIEW` · `BLOCKED` · `DONE`. M�
 | G1 | OTP nguyên tử (`INCR`/Lua) + test concurrency | 🟠 | DONE | #29 | Lua script cho verify, `SET NX` cho cooldown (D22). Code cũ fail 2 test song song |
 | B1 | Test product: publish gom lý do, PR10 all-or-nothing, PR12 seat, ẩn DRAFT | 🟠 | DONE | #30 | `ProductCatalogIntegrationTest` 12 case; sửa 3 lỗi test phát hiện: PR10 trả 1005 thay 3203, PR12 race gán ghế (7/8 request cùng thắng), PR12 không chặn field sai category |
 | P3-D1 | Unit test `CatalogValidationService`, `OrderCommandService` | 🟠 | DONE | #31 | `CatalogValidationServiceTest` (14, Mockito); state transition của `OrderCommandService` test ở mức integration (`OrderLifecycleIntegrationTest`, 12) vì phụ thuộc khóa/SQL |
-| P3-D2 | Giới hạn số vé tối đa mỗi request/Order (cấu hình được) | 🟠 | IN_REVIEW | feat/order-list-paging-ticket-limit | Mặc định 10/Order, lỗi `4012` (D24) — con số chờ xác nhận nghiệp vụ |
-| P3-D3 | Phân trang + lọc status `GET /orders` | 🟠 | IN_REVIEW | feat/order-list-paging-ticket-limit | Đổi shape sang `PageResponse`; đã cập nhật `frontend/src/lib/api/orders.ts` cùng PR |
+| P3-D2 | Giới hạn số vé tối đa mỗi request/Order (cấu hình được) | 🟠 | DONE | #32 | Mặc định 10/Order, lỗi `4012` (D24) — con số chờ xác nhận nghiệp vụ |
+| P3-D3 | Phân trang + lọc status `GET /orders` | 🟠 | DONE | #32 | Đổi shape sang `PageResponse`; đã cập nhật `frontend/src/lib/api/orders.ts` cùng PR |
 | P3-C | Integration/concurrency order: tranh ghế, tranh GA, idempotency replay/conflict, expire đúng một lần, consumer hủy event lặp | 🔴 | DONE | #31 | `OrderConcurrencyIntegrationTest` (13); sửa optimistic-lock 500 và deadlock khi expire song song (D23) |
 | P3-A | E2E vòng đời đơn: hold → thêm → sửa GA → confirm → hết hạn → hủy event | 🔴 | TODO | — | |
 | P3-B | k6 `seat-contention.js` + kết quả trong `k6/results/` | 🔴 | BLOCKED | — | Máy chưa có `k6`, không được pull image `grafana/k6`; thư mục `k6/` đang bị `.gitignore` chặn toàn bộ |
-| P3-D4 | DLQ/alerting outbox, backoff thay chu kỳ cố định | 🟠 | TODO | — | |
+| P3-D4 | DLQ/alerting outbox, backoff thay chu kỳ cố định | 🟠 | IN_REVIEW | feat/outbox-backoff-dead-letter | D25; sửa kèm lỗi publisher product không parse được `cancelledAt` (outbox kẹt khi có event bị hủy). Rule alert Prometheus chờ P9 |
 | P3-D5 | Đánh giá dùng OR08 (hủy giỏ) ở frontend | ⚪ | TODO | — | Chỉ khuyến nghị, không tự triển khai |
 
 ## Tài liệu

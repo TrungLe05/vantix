@@ -28,6 +28,7 @@
 | D22 | OTP nguyên tử: Lua script cho verify, `SET NX` cho cooldown | Chốt |
 | D23 | Order: thứ tự khóa Order → Hold, khóa theo id, job expire `SKIP LOCKED` | Chốt |
 | D24 | Tối đa 10 vé mỗi Order (cấu hình được) | Chốt tạm — chờ chủ sản phẩm xác nhận con số |
+| D25 | Outbox: backoff lũy thừa, dead-letter sau 10 lần, gauge + log ERROR làm tín hiệu alert | Chốt |
 
 ---
 
@@ -109,3 +110,6 @@ Integration test song song (job `expireDueOrders` + `GET /orders` + `GET /orders
 
 ### D24 — Giới hạn số vé mỗi Order
 Roadmap/design P3 không quy định con số; trước đây không có giới hạn (một buyer giữ được toàn bộ kho GA trong 10 phút). Chọn **10 vé/Order**, cấu hình bằng `app.order.max-tickets-per-order` (biến môi trường `ORDER_MAX_TICKETS_PER_ORDER`), tính tổng quantity mọi item ACTIVE (ghế + GA). Lý do: đủ cho nhóm bạn/gia đình, nằm trong khoảng 4–10 các nền tảng bán vé phổ biến áp dụng cho sự kiện thường, và làm chậm hành vi gom vé trước khi có bot-detection (P6). Kiểm tra trong transaction đã khóa Order nên không vượt được bằng request song song; request tự vượt bị chặn trước khi gọi Product. Giới hạn hiện tại: theo Order (= theo buyer × event vì mỗi buyer tối đa một CART/event), chưa theo buyer qua nhiều Order PENDING_PAYMENT/PAID — cần xem lại khi có P4. Frontend chưa biết con số, chỉ hiển thị message lỗi `4012`.
+
+### D25 — Retry, dead-letter và alert cho outbox
+Trước: retry cố định 5s, vô hạn, không có tín hiệu khi kẹt. Chọn: backoff `base × 2^attempt` trần 5 phút (Kafka sập lâu thì không dội DB/log mỗi 5s), sau 10 lần (~25 phút) đánh dấu `dead_at` thay vì xóa (giữ dữ liệu để requeue tay bằng SQL) — "DLQ" là trạng thái trong cùng bảng chứ không phải topic DLQ riêng, vì lỗi ở phía producer (không gửi được) nên topic DLQ cũng không gửi được. Lô dừng ở lỗi đầu tiên; producer `max.block.ms` hạ từ 60s xuống 10s (`app.kafka.producer.max-block-ms`, commonlib-kafka — cũng giảm thời gian request user-service bị treo khi Kafka sập). Alert: gauge `outbox.pending`/`outbox.dead` và log `OUTBOX_DEAD_LETTER`; chưa có Prometheus/Alertmanager (P9) nên rule alert (`outbox_dead > 0`, `outbox_pending` tăng liên tục) mới ở mức tài liệu. Viết test phát hiện thêm lỗi: publisher product đọc `cancelledAt` bằng `getTimestamp()` không parse được `Instant.toString()` → mọi lần hủy event làm cả outbox kẹt; đã sửa.

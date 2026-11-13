@@ -22,12 +22,13 @@ apiClient.interceptors.request.use((config) => {
 
 let refreshPromise: Promise<string> | null = null;
 
-function withRefreshLock<T>(refresh: () => Promise<T>): Promise<T> {
+async function withRefreshLock<T>(refresh: () => Promise<T>): Promise<T> {
   if (typeof navigator === "undefined" || !navigator.locks) {
     return refresh();
   }
 
-  return navigator.locks.request("vantix:refresh-token", { mode: "exclusive" }, refresh);
+  // await để TypeScript rút gọn Promise<Promise<T>> thành Promise<T>
+  return await navigator.locks.request("vantix:refresh-token", { mode: "exclusive" }, refresh);
 }
 
 export function refreshAccessToken(): Promise<string> {

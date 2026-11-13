@@ -23,6 +23,8 @@
 | D17 | Format response/lỗi thống nhất | Chốt |
 | D18 | Stripe test, USD | Chốt |
 | D19 | Device verification OTP | **Mở** — quyết sau P6 |
+| D20 | Bootstrap DB bằng init script của image postgres | Chốt |
+| D21 | Integration test dùng Postgres/Redis thật: compose local, service container ở CI | Chốt |
 
 ---
 
@@ -89,3 +91,9 @@ Stripe sandbox không hỗ trợ Việt Nam → tài khoản US, giá niêm yế
 
 ### D19 — (Mở) OTP xác thực thiết bị mới
 Phụ thuộc việc P6 có cần tín hiệu "thiết bị tin cậy" hay không. Không chặn tiến độ.
+
+### D20 — Bootstrap DB bằng init script
+`docker/postgres/init/01-create-databases.sql` mount vào `/docker-entrypoint-initdb.d`. Cân nhắc: (a) init script — đơn giản, không thêm container; (b) service one-shot chạy `psql` mỗi lần `up` — chạy cả với volume cũ nhưng thêm container; (c) để mỗi service tự tạo DB — Flyway không tạo được database. Chọn (a). Giới hạn: image chỉ chạy init khi volume trống, nên volume cũ phải chạy tay script (idempotent nhờ `\gexec` + `NOT EXISTS`, lệnh trong README).
+
+### D21 — Môi trường integration test
+Testcontainers là lựa chọn mặc định, nhưng môi trường dev hiện tại không được pull image hay tạo container ngoài project compose `vantix`. Vì vậy integration test kết nối Postgres/Redis qua biến môi trường: local dùng container compose đang chạy (DB/role test riêng, không đụng DB dev), CI dùng `services:` của GitHub Actions cùng image. Trade-off: test phụ thuộc hạ tầng đang chạy (không tự dựng), bù lại cùng một đường cấu hình cho local và CI. Kafka không cần cho các test này (publisher/consumer gọi trực tiếp).

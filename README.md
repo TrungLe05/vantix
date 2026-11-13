@@ -50,7 +50,10 @@ docs/           Tài liệu thiết kế theo phase — nguồn sự thật cho 
    ```bash
    docker compose up -d
    ```
-3. **Tạo database trước khi chạy service** (Compose không tự tạo; thiếu DB thì Flyway lỗi): `users_service`, `products_service`, `orders_service`, `payments_service`, `notifications_service`.
+3. Database cho từng service (`users_service`, `products_service`, `orders_service`, `payments_service`, `notifications_service`) được tạo tự động bởi `docker/postgres/init/01-create-databases.sql` khi volume Postgres **còn trống**. Volume cũ (đã tạo trước khi có script) thì chạy tay — script idempotent, DB đã có sẽ bỏ qua:
+   ```bash
+   docker exec -i postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres' < docker/postgres/init/01-create-databases.sql
+   ```
 4. Chạy service (mỗi module có `mvnw`), ví dụ:
    ```bash
    cd backend && mvn -pl services/user-service -am spring-boot:run

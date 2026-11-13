@@ -9,7 +9,7 @@ Trạng thái: `TODO` · `IN_PROGRESS` · `IN_REVIEW` · `BLOCKED` · `DONE`. M�
 | # | Hạng mục | Ưu tiên | Trạng thái | PR | Ghi chú |
 |---|---|---|---|---|---|
 | A1 | Init script tạo 5 DB trong Compose | 🔴 | DONE | #27 | `docker/postgres/init/01-create-databases.sql`, idempotent, chỉ tự chạy khi volume trống |
-| A2 | Service kết nối đúng DB (Flyway chạy) | 🔴 | IN_PROGRESS | — | user-service (#29), product-service (fix/product-publish-seat-constraints): Flyway chạy trên DB test; còn order |
+| A2 | Service kết nối đúng DB (Flyway chạy) | 🔴 | IN_REVIEW | #29, #30, test/order-concurrency-idempotency | Flyway của user/product/order chạy trên DB test cùng Postgres compose; DB dev tên đúng `application.yaml` (đã có sẵn trên container) |
 | D1 | Gỡ log fingerprint JWT secret (`JwtUtils`) | 🔴 | DONE | trước đợt này | Chỉ còn log TTL |
 | D2 | Log `DataIntegrityViolation`, token bị từ chối, lỗi OAuth2 chỉ còn loại/mã lỗi | 🔴 | DONE | trước đợt này | Đã rà `BaseGlobalExceptionHandler`, `JwtAuthenticationGlobalFilter`, `OAuth2LoginFailureHandler` |
 | D3 | Đánh giá rotate `JWT_SECRET_KEY` (fingerprint từng bị log) | 🟠 | BLOCKED | — | Cần chủ repo xác nhận log dev cũ có từng chia sẻ/công khai không; không đọc `.env` |
@@ -20,11 +20,11 @@ Trạng thái: `TODO` · `IN_PROGRESS` · `IN_REVIEW` · `BLOCKED` · `DONE`. M�
 | C1 | Test refresh rotation + reuse detection | 🟠 | DONE | #29 | `RefreshTokenRotationIntegrationTest` (Postgres thật): rotation, reuse thu hồi family, family khác không ảnh hưởng, 10 refresh song song → 1 thắng |
 | C3 | Test OTP attempts/cooldown | 🟠 | DONE | #29 | `OtpServiceIntegrationTest` (Redis thật) |
 | G1 | OTP nguyên tử (`INCR`/Lua) + test concurrency | 🟠 | DONE | #29 | Lua script cho verify, `SET NX` cho cooldown (D22). Code cũ fail 2 test song song |
-| B1 | Test product: publish gom lý do, PR10 all-or-nothing, PR12 seat, ẩn DRAFT | 🟠 | IN_REVIEW | fix/product-publish-seat-constraints | `ProductCatalogIntegrationTest` 12 case; sửa 3 lỗi test phát hiện: PR10 trả 1005 thay 3203, PR12 race gán ghế (7/8 request cùng thắng), PR12 không chặn field sai category |
-| P3-D1 | Unit test `CatalogValidationService`, `OrderCommandService` | 🟠 | TODO | — | |
+| B1 | Test product: publish gom lý do, PR10 all-or-nothing, PR12 seat, ẩn DRAFT | 🟠 | DONE | #30 | `ProductCatalogIntegrationTest` 12 case; sửa 3 lỗi test phát hiện: PR10 trả 1005 thay 3203, PR12 race gán ghế (7/8 request cùng thắng), PR12 không chặn field sai category |
+| P3-D1 | Unit test `CatalogValidationService`, `OrderCommandService` | 🟠 | IN_REVIEW | test/order-concurrency-idempotency | `CatalogValidationServiceTest` (14, Mockito); state transition của `OrderCommandService` test ở mức integration (`OrderLifecycleIntegrationTest`, 12) vì phụ thuộc khóa/SQL |
 | P3-D2 | Giới hạn số vé tối đa mỗi request/Order (cấu hình được) | 🟠 | TODO | — | |
 | P3-D3 | Phân trang + lọc status `GET /orders` | 🟠 | TODO | — | Không phá contract frontend hiện tại |
-| P3-C | Integration/concurrency order: tranh ghế, tranh GA, idempotency replay/conflict, expire đúng một lần, consumer hủy event lặp | 🔴 | TODO | — | Postgres/Redis thật (compose local, service container ở CI) |
+| P3-C | Integration/concurrency order: tranh ghế, tranh GA, idempotency replay/conflict, expire đúng một lần, consumer hủy event lặp | 🔴 | IN_REVIEW | test/order-concurrency-idempotency | `OrderConcurrencyIntegrationTest` (13); sửa optimistic-lock 500 và deadlock khi expire song song (D23) |
 | P3-A | E2E vòng đời đơn: hold → thêm → sửa GA → confirm → hết hạn → hủy event | 🔴 | TODO | — | |
 | P3-B | k6 `seat-contention.js` + kết quả trong `k6/results/` | 🔴 | BLOCKED | — | Máy chưa có `k6`, không được pull image `grafana/k6`; thư mục `k6/` đang bị `.gitignore` chặn toàn bộ |
 | P3-D4 | DLQ/alerting outbox, backoff thay chu kỳ cố định | 🟠 | TODO | — | |

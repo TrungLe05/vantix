@@ -1,0 +1,19 @@
+package com.dev.commonlib_kafka.topic;
+
+public final class KafkaTopics {
+
+    private KafkaTopics() {
+        // utility class, không cho khởi tạo
+    }
+
+    // user-service (P1)
+    public static final String USER_EMAIL_VERIFICATION_REQUESTED = "user.email-verification-requested";
+    public static final String USER_FORGOT_PASSWORD_REQUESTED = "user.forgot-password-requested";
+    public static final String USER_STAFF_ACCOUNT_CREATED = "user.staff-account-created";
+
+    // product-service (P2)
+    public static final String PRODUCT_EVENT_CANCELLED = "product.event-cancelled";
+
+    // order-service (P3)
+    public static final String ORDER_CART_ITEM_ADDED = "cart.item_added";
+}

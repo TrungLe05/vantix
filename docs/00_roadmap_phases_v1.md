@@ -65,12 +65,11 @@ Nguyên tắc dùng để tách service: **ai sở hữu dữ liệu này**, **t
 
 `api-gateway` và `assistant` **không có database riêng** — chúng không lưu trạng thái nghiệp vụ lâu dài.
 
-### Backlog cần quyết ở bước thiết kế API/luồng chi tiết (chưa ảnh hưởng ranh giới service)
+### Các quyết định còn mở ở bước thiết kế API/luồng chi tiết (không ảnh hưởng ranh giới service)
 
-1. **Ai thực thi thao tác trừ tồn kho:** Order tự trừ trong DB của mình khi tạo hold, hay gọi API sang Product để Product trừ? (Cần chốt ở P3, ảnh hưởng thiết kế bảng dữ liệu Order/Product.)
-2. **Luồng hoàn tiền hai chiều Order ↔ Payment:** Order tính % hoàn theo chính sách → gọi Payment thực hiện hoàn qua Stripe → Payment báo kết quả → Order cập nhật trạng thái. (Chi tiết hóa ở P4.)
-3. **Cơ chế nhả hold khi Payment thất bại/mất tín hiệu:** Cần cả tín hiệu chủ động (event từ Payment) **và** TTL độc lập ở Order làm lưới an toàn, không chỉ trông chờ vào tín hiệu từ Payment.
-4. **Vai trò STAFF được tạo bởi ADMIN** (đã chốt) — cần thiết kế endpoint tương ứng ở `user` service.
+1. **Luồng hoàn tiền hai chiều Order ↔ Payment:** Order tính % hoàn theo chính sách → gọi Payment thực hiện hoàn qua Stripe → Payment báo kết quả → Order cập nhật trạng thái. (Chi tiết hóa ở P4.)
+2. **Cơ chế nhả hold khi Payment thất bại/mất tín hiệu:** Cần cả tín hiệu chủ động (event từ Payment) **và** TTL độc lập ở Order làm lưới an toàn, không chỉ trông chờ vào tín hiệu từ Payment.
+3. **Vai trò STAFF được tạo bởi ADMIN** (đã chốt) — cần thiết kế endpoint tương ứng ở `user` service.
 
 ---
 
@@ -191,7 +190,7 @@ Nguyên tắc dùng để tách service: **ai sở hữu dữ liệu này**, **t
 3. API BUYER: danh sách sự kiện, chi tiết sự kiện, xem sơ đồ ghế + tình trạng (dữ liệu tĩnh từ Product, **chưa phản ánh hold thời gian thực** — việc đó Order xử lý riêng, cần làm rõ ở P3 cách hai bên đồng bộ tình trạng hiển thị).
 
 **Tài liệu cần sinh ra ở bước sau:**
-- ERD `product_service`.
+- ERD `products_service` (the database name configured by `product-service`).
 - API spec catalog (ADMIN + BUYER).
 
 **Tiêu chí hoàn thành:** ADMIN tạo được một sự kiện có cả sơ đồ ghế và hạng vé GA; BUYER xem được danh sách và chi tiết sự kiện đó.
@@ -204,27 +203,28 @@ Nguyên tắc dùng để tách service: **ai sở hữu dữ liệu này**, **t
 
 **Quyết định đã có sẵn:**
 - Giỏ hàng trong phạm vi **một sự kiện** (nhiều hạng vé/số lượng trong một đơn).
+- Mỗi BUYER có tối đa một Order `CART` cho mỗi event, nhưng có thể có Order đang hoạt động cho nhiều event.
+- Hold cố định **10 phút**, bắt đầu khi buyer bấm Continue và Order tạo hold đầu tiên; thêm item không gia hạn deadline chung.
+- Tạo hold nhiều item theo **all-or-nothing**: nếu một item không khả dụng, rollback toàn bộ yêu cầu.
+- Khi event bị hủy: chặn hold mới, giải phóng hold và chuyển các Order chưa thanh toán liên quan sang `CANCELLED`; vé đã thanh toán được hoàn 100% theo FR4 qua luồng Payment.
+- Confirm giỏ chuyển Order từ `CART` sang `PENDING_PAYMENT`; tích hợp Payment thuộc P4.
+- Chọn ghế/số lượng trước Continue chỉ là lựa chọn tạm ở frontend; timer bắt đầu sau khi Order tạo hold thành công.
+- Order sở hữu tồn kho giao dịch; Product là nguồn catalog và số lượng gốc.
 - Redis TTL cho hold (lớp nhanh) + ràng buộc/update nguyên tử ở DB (lớp đảm bảo cuối) — xem mục 3.5.
 - Idempotency key cho các thao tác dễ bị retry (đặc biệt là khởi tạo thanh toán, xem P4).
 - Order → bot-detection là bất đồng bộ (Kafka) ở bước thêm giỏ hàng.
 
-**Cần quyết định khi thiết kế chi tiết (backlog từ mục 2):**
-- Ai thực thi thao tác trừ tồn kho: Order tự trừ, hay gọi API sang Product?
+**Các chi tiết kỹ thuật cần hoàn thiện khi triển khai:**
+- Cách khởi tạo/đối soát tồn GA cục bộ tại Order với số lượng gốc từ Product.
+- Quyền truy cập và cơ chế refresh availability cho UI.
+- Bảo đảm Kafka event không mất sau khi transaction tạo hold đã commit; chốt schema privacy phù hợp P8.
+- Xử lý payment thành công đến sau deadline hold; đồng bộ deadline với Payment ở P4.
 
-**Việc cần làm:**
-1. Data model: `Order` (trạng thái: CART → PENDING_PAYMENT → PAID → TICKETS_ISSUED / CANCELLED / EXPIRED), `OrderItem` (seat_id hoặc ticket_type_id + số lượng), `Hold` (trạng thái HELD/EXPIRED/RELEASED/CONFIRMED, `expires_at`).
-2. API: thêm/bỏ vé khỏi giỏ (tạo/hủy hold), xem giỏ hàng hiện tại, xác nhận giỏ hàng để chuyển sang bước thanh toán.
-3. Cơ chế tự nhả hold hết hạn: kết hợp TTL của Redis + job định kỳ kiểm tra/dọn dẹp ở DB (lưới an toàn nếu Redis lỗi).
-4. Publish sự kiện Kafka mỗi khi có hành động thêm giỏ hàng, để bot-detection (P6) tiêu thụ.
-5. Kiểm thử tải bằng k6: mô phỏng nhiều request tranh chấp cùng một ghế, xác nhận không có ghế nào bị giữ/bán cho hai người.
+**Đã triển khai:** model/migrations, API create/add/remove/list/detail/confirm/availability, Redis TTL + DB expiry, Kafka outbox/consumer hủy event, và UI tạo hold/cart cho BUYER.
 
-**Tài liệu cần sinh ra ở bước sau:**
-- ERD `order_service`.
-- State machine đầy đủ của `Order` và `Hold`.
-- API spec giỏ hàng/giữ chỗ.
-- Kết quả kiểm thử tải (k6) làm bằng chứng chống bán trùng.
+**Tài liệu P3:** ERD/state machine/API/UI/k6 plan tại `docs/order/P3_order_*.md`; database trong config là `orders_service`.
 
-**Tiêu chí hoàn thành:** k6 xác nhận không có ghế nào bị bán trùng khi nhiều request tranh chấp đồng thời; hold hết hạn được nhả đúng.
+**Còn trước khi đánh dấu P3 hoàn tất:** chạy PostgreSQL/Redis/Kafka end-to-end và k6 contention (script `backend/services/order-service/k6/seat-contention.js`); lưu kết quả chạy, xác nhận hold hết hạn được nhả đúng.
 
 ---
 

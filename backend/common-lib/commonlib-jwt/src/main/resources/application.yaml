@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: commonlib-jwt
+app:
+  jwt:
+    secret-key: ${JWT_SECRET_KEY}
+    expiration: 15m
+    expiration-refresh: 7d

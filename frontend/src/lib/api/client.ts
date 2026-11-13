@@ -1,0 +1,86 @@
+// src/lib/api/client.ts
+import axios, { type InternalAxiosRequestConfig } from "axios";
+import { useAuthStore } from "@/store/auth-store";
+
+interface RetryableConfig extends InternalAxiosRequestConfig {
+  _retried?: boolean;
+}
+
+export const ACCESS_DENIED_EVENT = "vantix:access-denied";
+export const SERVER_ERROR_EVENT = "vantix:server-error";
+
+export const apiClient = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
+  withCredentials: true,
+});
+
+apiClient.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().accessToken;
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+let refreshPromise: Promise<string> | null = null;
+
+async function withRefreshLock<T>(refresh: () => Promise<T>): Promise<T> {
+  if (typeof navigator === "undefined" || !navigator.locks) {
+    return refresh();
+  }
+
+  // await để TypeScript rút gọn Promise<Promise<T>> thành Promise<T>
+  return await navigator.locks.request("vantix:refresh-token", { mode: "exclusive" }, refresh);
+}
+
+export function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = withRefreshLock(async () => {
+      const res = await apiClient.post("/auth/refresh");
+      const { auth, user } = res.data.result;
+      useAuthStore.getState().setSession(auth.accessToken, user);
+      return auth.accessToken as string;
+    })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+apiClient.interceptors.response.use(
+  (res) => res,
+  async (error) => {
+    const config = error.config as RetryableConfig;
+    const errorCode = error.response?.data?.code;
+
+    if (errorCode === 1004 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(ACCESS_DENIED_EVENT));
+    }
+    if (typeof window !== "undefined" && errorCode === 1000) {
+      window.dispatchEvent(new Event(SERVER_ERROR_EVENT));
+    }
+
+    if (errorCode === 9003 && !config._retried) {
+      config._retried = true;
+      try {
+        const newToken = await refreshAccessToken();
+        config.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient.request(config);
+      } catch {
+        useAuthStore.getState().clear();
+      }
+    }
+
+    return Promise.reject(error);
+  },
+);
+
+/** Read API errors using the P0 convention, preferring the backend message. */
+export function getErrorMessage(
+  error: unknown,
+  fallback = "An error occurred. Please try again.",
+): string {
+  if (axios.isAxiosError(error) && error.response?.data?.message) {
+    return error.response.data.message as string;
+  }
+  return fallback;
+}

@@ -1,0 +1,5 @@
+spring:
+  application:
+    name: commonlib-kafka
+  kafka:
+    bootstrap-servers: localhost:9092

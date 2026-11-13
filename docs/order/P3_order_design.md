@@ -174,6 +174,7 @@ Product và Order dùng DB riêng nên consumer có eventual consistency. API c�
 - Order phát `cart.item_added` khi buyer tạo/thêm item; P6 consume để phân tích bot.
 - Order consume product.event-cancelled để hủy/nhả Order chưa thanh toán.
 - Consumer idempotent. Payload không có email, tên hoặc IP thô.
+- Consumer cần `spring-boot-starter-kafka` (Boot 4 tách auto-configuration Kafka; thiếu thì `@KafkaListener` bị bỏ qua âm thầm — đã xảy ra trước 14/11/2026, `OrderEventListenerRegistrationTest` chặn hồi quy). Group id cấu hình bằng `app.order.kafka-consumer-group` (mặc định `order-service`) để stack test dùng chung cluster không tranh partition.
 - Schema/key được triển khai; transactional outbox retry lỗi publish. Consumer downstream phải idempotent vì Kafka có thể nhận thành công trước khi DB đánh dấu published.
 
 ## 8. Kiểm chứng và tiêu chí hoàn thành

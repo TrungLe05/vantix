@@ -13,4 +13,7 @@ public final class KafkaTopics {
 
     // product-service (P2)
     public static final String PRODUCT_EVENT_CANCELLED = "product.event-cancelled";
+
+    // order-service (P3)
+    public static final String ORDER_CART_ITEM_ADDED = "cart.item_added";
 }

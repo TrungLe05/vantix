@@ -1,0 +1,21 @@
+# Profile integration test (D21): PostgreSQL/Redis thật, DB riêng orders_service_test
+# (docker/postgres/test/create-test-databases.sql) và Redis DB 15 — không đụng dữ liệu dev.
+# Product-service được thay bằng mock (ProductCatalogClient) trong test.
+spring:
+  datasource:
+    url: jdbc:postgresql://${IT_DB_HOST:localhost}:${IT_DB_PORT:5432}/orders_service_test
+    username: ${IT_DB_USER:vantix_test}
+    password: ${IT_DB_PASSWORD:vantix_test}
+  data:
+    redis:
+      host: ${IT_REDIS_HOST:localhost}
+      port: ${IT_REDIS_PORT:6379}
+      database: 15
+  # Không trỏ vào Kafka dev; consumer gọi trực tiếp trong test nên tắt listener container
+  kafka:
+    bootstrap-servers: localhost:1
+    listener:
+      auto-startup: false
+app:
+  order:
+    outbox-poll-interval-ms: 3600000

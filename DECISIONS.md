@@ -26,6 +26,7 @@
 | D20 | Bootstrap DB bằng init script của image postgres | Chốt |
 | D21 | Integration test dùng Postgres/Redis thật: compose local, service container ở CI | Chốt |
 | D22 | OTP nguyên tử: Lua script cho verify, `SET NX` cho cooldown | Chốt |
+| D23 | Order: thứ tự khóa Order → Hold, khóa theo id, job expire `SKIP LOCKED` | Chốt |
 
 ---
 
@@ -101,3 +102,6 @@ Testcontainers là lựa chọn mặc định, nhưng môi trường dev hiện 
 
 ### D22 — OTP nguyên tử
 Trước đây `verify()` đọc JSON, so khớp, rồi ghi lại `attemptCount` ở Java; cooldown là `hasKey` rồi mới `SET`. Integration test song song chứng minh: 20 lần đoán sai đồng thời chỉ đếm được < 5 (vượt giới hạn), 10 lần gửi mã đúng đồng thời có > 1 lần qua. Cân nhắc: (a) `INCR` key đếm riêng — phải đổi định dạng lưu và vẫn cần bước "đúng thì xóa" nguyên tử; (b) `WATCH/MULTI` — retry phức tạp; (c) Lua script giữ nguyên định dạng `OtpEntry` JSON — chọn (c). Cooldown chuyển sang `SET NX EX 60` (`tryStartCooldown`). Giới hạn: so sánh hash trong Lua không constant-time (chấp nhận vì là HMAC phía server). Đọc thêm: `docs/auth/P1_auth_api_design.md` A02/A03/A10.
+
+### D23 — Thứ tự khóa khi expire/hủy Order
+Integration test song song (job `expireDueOrders` + `GET /orders` + `GET /orders/{id}` + availability cùng gặp một Order quá hạn) phát hiện hai lỗi: (1) `getActiveOrders`/`cancelUnpaidOrdersForEvent` nạp Order không khóa rồi mới khóa lại → persistence context giữ bản cũ → `ObjectOptimisticLockingFailureException` (500); (2) availability khóa Hold rồi tới Order, job khóa Order rồi tới Hold → deadlock. Chốt: chỉ lấy id, khóa Order theo id tăng dần, kiểm tra lại trạng thái sau khóa; luôn Order → Hold; job dùng SKIP LOCKED. Cân nhắc khác: retry khi optimistic lock fail (che lỗi, vẫn có deadlock), advisory lock theo event cho mọi đường đọc (tuần tự hóa availability — quá đắt). Giới hạn: job xử lý một lô trong một transaction; lô lớn giữ khóa lâu hơn (chấp nhận ở quy mô hiện tại).

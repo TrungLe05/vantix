@@ -313,15 +313,15 @@ public class OrderCommandService {
 
     @Transactional
     public List<OrderResponse> getActiveOrders(UUID buyerId) {
+        Instant now = Instant.now();
+        // Expire trước khi nạp danh sách: khóa từng Order quá hạn và kiểm tra lại (job định kỳ hoặc
+        // request khác có thể vừa expire cùng Order), tránh lệch version với bản đã nạp sẵn
+        orderRepository.findExpiredIdsByBuyer(buyerId, UNPAID_ORDER_STATUSES, now).stream()
+                .sorted()
+                .forEach(orderId -> expireRelatedOrder(orderId, now));
         List<Order> orders = orderRepository.findByBuyerIdAndStatusInOrderByCreatedAtDesc(
                 buyerId, UNPAID_ORDER_STATUSES
         );
-        Instant now = Instant.now();
-        for (Order order : orders) {
-            if (isExpired(order, now)) {
-                expireOrder(order, now);
-            }
-        }
         return orderMapper.toResponses(orders.stream()
                 .filter(order -> UNPAID_ORDER_STATUSES.contains(order.getStatus()))
                 .toList());
@@ -343,9 +343,10 @@ public class OrderCommandService {
                         "ON CONFLICT (event_id) DO NOTHING",
                 eventId
         );
-        List<Order> orders = orderRepository.findByEventIdAndStatusIn(eventId, UNPAID_ORDER_STATUSES);
-        for (Order summary : orders) {
-            orderRepository.findByIdForUpdate(summary.getId()).ifPresent(order -> {
+        // Lấy id rồi mới khóa từng Order (xem OrderRepository.findIdsByEventIdAndStatusIn)
+        for (UUID orderId : orderRepository.findIdsByEventIdAndStatusIn(eventId, UNPAID_ORDER_STATUSES)
+                .stream().sorted().toList()) {
+            orderRepository.findByIdForUpdate(orderId).ifPresent(order -> {
                 if (UNPAID_ORDER_STATUSES.contains(order.getStatus())) {
                     cancelOrder(order);
                 }
@@ -613,21 +614,14 @@ public class OrderCommandService {
     }
 
     private void expireStaleHoldsForEvent(ValidatedCatalog catalog, Instant now) {
-        for (ProductCatalog.TicketType type : catalog.event().ticketTypes()) {
-            List<Hold> expired = holdRepository.findExpiredByTicketTypeIdForUpdate(
-                    type.id(), ACTIVE_HOLD_STATUSES, now
-            );
-            for (Hold hold : expired) {
-                expireRelatedOrder(hold.getOrderId(), now);
-            }
+        List<UUID> ticketTypeIds = catalog.event().ticketTypes().stream().map(ProductCatalog.TicketType::id).toList();
+        if (ticketTypeIds.isEmpty()) {
+            return;
         }
-        for (ProductCatalog.Seat seat : catalog.seats().values()) {
-            holdRepository.findBySeatIdAndStatusIn(seat.id(), ACTIVE_HOLD_STATUSES).ifPresent(hold -> {
-                if (!hold.getExpiresAt().isAfter(now)) {
-                    expireRelatedOrder(hold.getOrderId(), now);
-                }
-            });
-        }
+        // Khóa từng Order theo id tăng dần: các request cùng expire nhiều Order luôn khóa cùng thứ tự
+        holdRepository.findOrderIdsWithExpiredHolds(ticketTypeIds, ACTIVE_HOLD_STATUSES, now).stream()
+                .sorted()
+                .forEach(orderId -> expireRelatedOrder(orderId, now));
     }
 
     private void expireRelatedOrder(UUID orderId, Instant now) {

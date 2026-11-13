@@ -12,7 +12,7 @@ import java.util.UUID;
 /**
  * Response xem sơ đồ ghế (PR11).
  * Mỗi Seat kèm ticketType tương ứng (null nếu ghế chưa được gán — chỉ xảy ra khi event còn DRAFT).
- * Ở P2 không có trường saleStatus — sẽ bổ sung ở P3 khi product-service consume order.seat-status-changed.
+ * Trạng thái giao dịch (đang giữ/đã bán) do Order cung cấp riêng; Product chỉ trả catalog tĩnh.
  */
 @Getter
 @Builder
@@ -31,6 +31,7 @@ public class SeatMapDetailResponse {
         private String rowLabel;
         private String seatNumber;
         private String displayLabel;
+        private String status;
 
         /** null nếu ghế chưa gán hạng vé (chỉ xảy ra khi event DRAFT). */
         @JsonInclude(JsonInclude.Include.ALWAYS)

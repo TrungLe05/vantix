@@ -121,7 +121,7 @@ Quy ước mỗi phase: `Pn_*_design.md` (quyết định, ERD, sequence) → `P
 
 ## 9. Tiến độ
 
-P0 hạ tầng ✅ · P1 User & Auth ✅ (14 API) · P2 Product ✅ phần lớn (còn: bootstrap DB `products_service`, chưa có test) · P3 Order 🟡 đã code (9 API, hold Redis + DB, outbox `cart.item_added`, consumer `product.event-cancelled`, UI cart; còn: E2E + k6, test concurrency) · P4–P9 chưa bắt đầu. Repo chưa có test tự động đáng kể (chỉ `OrderRequestHasherTest`). Chi tiết: `PROGRESS.md`.
+P0 hạ tầng ✅ · P1 User & Auth ✅ (14 API) · P2 Product ✅ phần lớn (còn: bootstrap DB `products_service`, chưa có test) · P3 Order 🟡 đã code + test concurrency/integration (9 API, hold Redis + DB, outbox có dead-letter, consumer `product.event-cancelled`, UI cart; còn: E2E xuyên service + kết quả k6) · P4–P9 chưa bắt đầu. Integration test dùng Postgres/Redis thật (D21: compose local, service container ở CI, DB `*_test` tạo bằng `docker/postgres/test/create-test-databases.sql`). Chi tiết: `PROGRESS.md`, backlog: `TASKS.md`.
 
 ## 10. Cách làm việc với Claude
 

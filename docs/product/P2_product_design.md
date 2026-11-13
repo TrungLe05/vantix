@@ -37,7 +37,7 @@ stateDiagram-v2
 
 - **DRAFT**: BUYER không thấy (API danh sách chỉ trả `PUBLISHED`). ADMIN tự do thêm/sửa/xóa sơ đồ ghế và hạng vé.
 - **PUBLISHED**: BUYER thấy trong catalog (ở P3 có thể mua). Khi publish, code kiểm tra thời gian diễn ra, sales window, hạng vé và ghế; các lý do không đạt được trả cùng error 3105.
-- **CANCELLED**: BUYER vẫn xem được (để biết sự kiện đã hủy) nhưng không mua được. Product phát Kafka `product.event-cancelled` sau khi transaction đổi trạng thái đã commit; consumer/hoàn tiền thuộc Order/Payment ở P4.
+- **CANCELLED**: BUYER vẫn xem được (để biết sự kiện đã hủy) nhưng không mua được. Product phát Kafka `product.event-cancelled` sau khi transaction đổi trạng thái đã commit; Order consume từ P3 để hủy Order chưa thanh toán/nhả hold, Payment hoàn tiền Order đã thanh toán ở P4.
 - P2 **không** có trạng thái sự kiện đã diễn ra xong (`COMPLETED`) — để dành giai đoạn sau nếu cần phân biệt hiển thị.
 
 ---
@@ -212,7 +212,7 @@ sequenceDiagram
     PS-->>U: 200 {seatMap, seats: [{id, section, rowLabel, seatNumber, ticketType: {...}}]}
 ```
 
-**Lưu ý:** response `seat-map` ở P2 **không có trường trạng thái bán/giữ** cho từng ghế — đây là dữ liệu tĩnh thuần catalog. Khi tích hợp với Order ở P3, cần quyết định: (a) BUYER gọi thẳng Order để lấy trạng thái real-time rồi merge ở frontend, hay (b) Product expose thêm một API tổng hợp gọi ngược sang Order. Xem backlog #2.
+**Lưu ý:** response `seat-map` là catalog tĩnh. Ở P3, frontend gọi API availability của Order rồi merge theo seat ID; không lưu trạng thái giao dịch trong Product và không gọi ngược từ Product sang Order.
 
 ### 5.3 Validate khi publish (chi tiết hóa bước trong 5.1)
 
@@ -241,8 +241,8 @@ sequenceDiagram
 
 ## 6. Các quyết định sau thiết kế và trạng thái thực hiện
 
-1. **Hủy event / thông báo hoàn tiền (FR4):** hướng Kafka đã chốt và producer có trong code. Việc consumer và hoàn tiền thuộc P4; cách phát event sau commit còn là gap (xem audit API).
-2. **Trạng thái ghế real-time:** chưa thuộc P2. Order sở hữu hold/sold; giao tiếp qua `order.seat-status-changed` được thiết kế cho P3, chưa có trong product-service.
+1. **Hủy event / thông báo hoàn tiền (FR4):** Product ghi Kafka `product.event-cancelled` vào transactional outbox cùng transaction hủy; publisher retry nếu Kafka chưa nhận. Order consume từ P3 để hủy Order chưa thanh toán/nhả hold; Payment xử lý refund ở P4.
+2. **Trạng thái ghế real-time:** Order sở hữu hold/sold và cung cấp API availability cho frontend; Product chỉ giữ catalog tĩnh, không consume `order.seat-status-changed`.
 3. **Sửa event đã PUBLISHED:** code hiện cho sửa tên/giá ticket type đã publish, đúng quyết định tạm thời ở API design; phải xem lại trước khi có vé bán ở P3/P4.
 4. **Lọc danh sách event:** code hiện chỉ hỗ trợ phân trang, lọc PUBLISHED và `startAt >= now`; lọc thành phố/thời gian/từ khóa chưa có.
 5. **Ảnh event:** P2 chỉ lưu URL; upload file thật không nằm trong phạm vi.

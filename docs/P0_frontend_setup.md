@@ -112,7 +112,7 @@ src/
 
 ## 5. API client — interceptor và luồng refresh token
 
-Đây là phần dễ sai nhất vì phải khớp đúng 2 ràng buộc đã có ở backend: access token sống 15 phút, và **phải serialize việc gọi refresh** (gọi refresh trùng lặp sẽ bị tính là reuse, đá người dùng ra khỏi mọi thiết bị — đã cảnh báo ở `P1_auth_api_design.md` A08).
+Đây là phần dễ sai nhất vì phải khớp đúng 2 ràng buộc đã có ở backend: access token sống 15 phút, và **phải serialize việc gọi refresh trên toàn bộ tab trong cùng origin** (gọi refresh trùng lặp sẽ bị tính là reuse, đá người dùng ra khỏi mọi thiết bị — đã cảnh báo ở `P1_auth_api_design.md` A08). Frontend dùng một Promise dùng chung trong tab và Web Locks API giữa các tab; cả silent refresh lúc khởi động lẫn refresh sau mã 9003 phải đi qua cùng helper.
 
 ```typescript
 // lib/api/client.ts

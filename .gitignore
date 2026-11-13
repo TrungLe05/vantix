@@ -41,3 +41,5 @@ services/assistant-service/.venv
 # Local agent skills
 .agents/
 skills-lock.json
+
+/backend/services/order-service/k6

@@ -128,7 +128,7 @@ export default function DiscoveryPage() {
           className="mb-8 flex flex-col gap-3 border-b border-border pb-6 md:flex-row md:items-center md:justify-between"
         >
           <div className="flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:items-center">
-            <label className="relative w-full md:w-[360px]">
+            <label className="relative w-full md:w-90">
               <Search
                 aria-hidden="true"
                 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"

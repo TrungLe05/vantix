@@ -2,8 +2,6 @@ package com.dev.product_service.services;
 
 import com.dev.commonlib_api_response.exception.AppException;
 import com.dev.commonlib_api_response.exception.CommonErrorCode;
-import com.dev.commonlib_kafka.event.EventCancelledEvent;
-import com.dev.commonlib_kafka.topic.KafkaTopics;
 import com.dev.product_service.dto.request.CreateEventRequest;
 import com.dev.product_service.dto.request.UpdateEventRequest;
 import com.dev.product_service.dto.response.*;
@@ -24,11 +22,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -47,7 +43,7 @@ public class EventServiceImpl implements EventService {
     private final SeatMapRepository seatMapRepository;
     private final SeatRepository seatRepository;
     private final EventTimeValidator timeValidator;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final JdbcTemplate jdbcTemplate;
 
     // ─────────────────────────────────────────────────────────────────────────
     // PR03 — Tạo sự kiện
@@ -242,26 +238,12 @@ public class EventServiceImpl implements EventService {
         event.setStatus(EventStatus.CANCELLED);
         EventResponse response = buildResponse(eventRepository.save(event));
 
-        UUID cancelledEventId = event.getId();
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                // Chỉ phát sau commit để consumer không nhận trạng thái hủy chưa được lưu.
-                try {
-                    kafkaTemplate.send(
-                            KafkaTopics.PRODUCT_EVENT_CANCELLED,
-                            cancelledEventId.toString(),
-                            new EventCancelledEvent(cancelledEventId, cancelledAt)
-                    ).whenComplete((result, ex) -> {
-                        if (ex != null) {
-                            log.error("Publish product.event-cancelled thất bại, eventId={}", cancelledEventId, ex);
-                        }
-                    });
-                } catch (RuntimeException ex) {
-                    log.error("Không thể gửi product.event-cancelled, eventId={}", cancelledEventId, ex);
-                }
-            }
-        });
+        jdbcTemplate.update(
+                "INSERT INTO event_outbox (event_id, event_type, payload) VALUES (?, ?, CAST(? AS jsonb))",
+                event.getId(),
+                "product.event-cancelled",
+                "{\"eventId\":\"" + event.getId() + "\",\"cancelledAt\":\"" + cancelledAt + "\"}"
+        );
 
         return response;
     }

@@ -29,6 +29,7 @@ public class KafkaProducerConfig {
         // Key này giữ nguyên tên dù đổi serializer, theo tài liệu Spring Boot
         config.put("spring.json.add.type.headers", false);
         config.put(ProducerConfig.ACKS_CONFIG, "all");
+        config.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         return new DefaultKafkaProducerFactory<>(config);
     }
 

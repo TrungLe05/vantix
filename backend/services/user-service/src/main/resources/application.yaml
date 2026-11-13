@@ -42,4 +42,6 @@ app:
       password: ${DEFAULT_ADMIN_PASSWORD}
     default-staff:
       username: ${DEFAULT_STAFF_USER_NAME}
-      password: ${DEFAULT_ADMIN_PASSWORD}
+      password: ${DEFAULT_STAFF_PASSWORD}
+    default-buyer:
+      password: ${DEFAULT_BUYER_PASSWORD}

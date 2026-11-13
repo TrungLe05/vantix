@@ -13,7 +13,7 @@ Java 21, Spring Boot 4.1.x, Spring Cloud 2025.1.2, Lombok 1.18.42, Maven. Postgr
 |---|---|---|
 | api-gateway | 8999 | — |
 | notification | 9000 | notification_service |
-| order | 9001 | order_service |
+| order | 9001 | orders_service |
 | payment | 9002 | payment_service |
 | product | 9003 | products_service |
 | user | 9004 | user_service |

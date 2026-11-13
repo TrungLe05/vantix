@@ -83,9 +83,9 @@ Một nút duy nhất bên dưới toàn bộ danh sách:
 
 Theo mockup đã duyệt: lưới ghế nhóm theo `section`, panel bên phải "Your tickets" + tổng tiền + nút Continue.
 
-**Giới hạn quan trọng cần biết trước khi code:** response PR11 (`GET /events/{id}/seat-map`) ở P2 **không có trường trạng thái bán/giữ** cho từng ghế (xem `P2_product_api_design.md` mục 0 — cột này chỉ được thêm ở P3 khi `order-service` publish Kafka). Hệ quả:
+**Giới hạn quan trọng:** response PR11 (`GET /events/{id}/seat-map`) chỉ có trạng thái catalog `ACTIVE`/`INACTIVE`. Trạng thái giao dịch (`HELD`/`SOLD`/`AVAILABLE`) được ghép từ API availability của Order, không publish ngược từ Order vào Product.
 
-- Component ghế **chỉ có 2 trạng thái thật từ dữ liệu**: `available` (mặc định) và `selected` (local state khi người dùng bấm). **Không** có trạng thái `sold` lấy từ API — nếu muốn test UI trạng thái "đã bán" ở giai đoạn này, phải tự mock cứng vài ghế trong code demo, ghi rõ bằng comment `// TODO P3: thay bằng dữ liệu thật từ order.seat-status-changed`.
+- Component ghế ghép trạng thái catalog từ Product với availability `AVAILABLE`/`HELD`/`SOLD`/`UNAVAILABLE` từ Order; selection vẫn là local state cho đến khi Order xác nhận hold.
 - Vẽ ghế: lưới CSS Grid theo `section` → `rowLabel` → `seatNumber`, **không cần** canvas/SVG phức tạp như mockup gợi ý ban đầu ở prompt — vì dữ liệu ghế hiện tại không có tọa độ x/y (backend chỉ lưu `section`/`row`/`number`, xem ERD P2), nên bố trí tự nhiên theo hàng/cột là đủ và đúng với dữ liệu thật đang có. Giữ phong cách thị giác giống mockup (ô vuông bo góc, đổi màu theo state) nhưng layout là grid thường, không phải vẽ tọa độ tự do.
 - Panel "Your tickets" tổng hợp: ghế đã chọn (group theo `ticketType.name`) + số lượng GA đã chọn ở trang trước đó (truyền qua query param hoặc state toàn cục tạm thời — **không cần Zustand riêng**, vì chỉ sống trong phiên thao tác 1 lần, dùng `useState` ở layout cha của route này là đủ).
 

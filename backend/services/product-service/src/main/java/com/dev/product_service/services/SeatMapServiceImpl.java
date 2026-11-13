@@ -168,6 +168,7 @@ public class SeatMapServiceImpl implements SeatMapService {
                             .rowLabel(seat.getRowLabel())
                             .seatNumber(seat.getSeatNumber())
                             .displayLabel(seat.getDisplayLabel())
+                            .status(seat.getStatus().name())
                             .ticketType(tt == null ? null : SeatMapDetailResponse.TicketTypeBrief.builder()
                                     .id(tt.getId())
                                     .name(tt.getName())

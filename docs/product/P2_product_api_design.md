@@ -36,10 +36,10 @@ Hai việc này vẫn là gap implementation; không được hiểu là đã ho
 
 | Backlog | Quyết định | Áp dụng ở P2 |
 |---|---|---|
-| #1 — Trigger hoàn tiền khi hủy sự kiện | **Hướng A**: `product-service` publish Kafka `product.event-cancelled` ngay khi ADMIN gọi `cancel` | **Implement ngay trong P2** (chỉ phần publish; chưa có consumer vì `order-service` chưa tồn tại tới P3/P4) |
-| #2 — Đồng bộ trạng thái ghế real-time | **Hướng C**: `order-service` (P3) publish Kafka `order.seat-status-changed`, `product-service` consume để cache trạng thái hiển thị lên `Seat`, chấp nhận độ trễ nhỏ | **Chưa implement ở P2** — chỉ đặt tên topic trước (mục 8) để nhất quán khi tới P3; P2 không có cột lưu trạng thái bán trên `Seat`, không có consumer |
+| #1 — Trigger hoàn tiền khi hủy sự kiện | **Hướng A**: Product phát `product.event-cancelled` sau khi ADMIN hủy event | P2 định nghĩa topic; P3 bổ sung Product transactional outbox và Order consumer để giải phóng hold. Payment hoàn tiền event đã thanh toán thuộc P4 |
+| #2 — Availability ghế real-time | **Hướng A**: `order-service` (P3) cung cấp API availability; frontend ghép trạng thái giao dịch với seat map tĩnh từ Product | P3 triển khai tại Order; Product không consume trạng thái giao dịch và không lưu trạng thái hold/sale trên `Seat` |
 
-Cả hai cùng một họ giải pháp (Kafka đồng bộ trạng thái giữa các service, chấp nhận độ trễ nhỏ, không thay thế ràng buộc DB chống bán trùng ở Order) — nhất quán với cách Payment→Order đã làm ở roadmap mục 3.3.
+Hủy event vẫn dùng Kafka từ Product sang Order. Availability được đọc trực tiếp từ Order; DB Order mới là nguồn quyết định giao dịch và UI không dùng dữ liệu availability để thay thế thao tác tạo hold.
 
 ---
 
@@ -347,7 +347,7 @@ Không phân trang; mảng rỗng nếu chưa có venue nào. Không có lỗi n
 3. Sau khi commit: publish `product.event-cancelled` (payload: `eventId`, `cancelledAt`) — lỗi publish chỉ log, không ảnh hưởng response (mục 4 điểm 3).
 4. Trả 200.
 
-**Lưu ý:** P2 chưa có consumer nào lắng nghe topic này (`order-service` chưa tồn tại) — việc publish chỉ để sẵn sàng cho P4, không có tác dụng quan sát được ở P2.
+**Lưu ý:** Product lưu sự kiện vào transactional outbox cùng transaction hủy event và retry publish đến khi Kafka nhận. Từ P3, Order consume idempotently để hủy các Order chưa thanh toán và giải phóng hold; việc hoàn tiền Order đã thanh toán thuộc P4.
 
 ---
 
@@ -563,7 +563,7 @@ Validation từng phần tử: mục 3. `displayLabel` **không** nhận từ cl
 | 404 | 3101 | Event không tồn tại, hoặc đang `DRAFT` (mục 4 điểm 6) |
 | 404 | 3202 | Event `PUBLISHED`/`CANCELLED` nhưng không có sơ đồ ghế (event chỉ bán GA) |
 
-**Ghi chú (liên quan backlog #2, mục 0):** response hiện **không có** trường trạng thái bán/giữ (`saleStatus`) cho từng ghế — sẽ được thêm ở P3 khi `product-service` có consumer cho `order.seat-status-changed` (mục 8). Đây là thay đổi cộng thêm field (additive), không phá vỡ hợp đồng API hiện tại.
+**Ghi chú:** response seat map chỉ chứa catalog tĩnh, gồm trạng thái sử dụng catalog `ACTIVE`/`INACTIVE`. Availability giao dịch (HELD/SOLD/AVAILABLE) do Order cung cấp qua API riêng và frontend ghép theo `seatId`; Product không lưu trạng thái bán/giữ.
 
 ---
 
@@ -665,10 +665,9 @@ Validation từng phần tử: mục 3. `displayLabel` **không** nhận từ cl
 
 | Topic | Producer | Consumer | Trạng thái | Payload |
 |---|---|---|---|---|
-| `product.event-cancelled` | product-service | order-service | **Implement ở P2** (chỉ phía publish) | `{ eventId, cancelledAt }` |
-| `order.seat-status-changed` | order-service | product-service | **Chỉ đặt tên trước** — code ở P3 | Dự kiến: `{ seatId, status: HELD\|AVAILABLE\|SOLD, changedAt }`, có thể đổi khi thiết kế P3 |
+| `product.event-cancelled` | product-service | order-service | **Publish ở P2; consume từ P3** | `{ eventId, cancelledAt }` |
 
-Hằng số topic đầu tiên thêm vào `KafkaTopics` (module `commonlib-kafka`) khi code PR06; hằng số thứ hai thêm khi code `order-service` ở P3, không thêm trước để tránh code chết không ai dùng.
+Order cung cấp API availability trong P3; không tạo topic đồng bộ trạng thái ghế về Product.
 
 ---
 

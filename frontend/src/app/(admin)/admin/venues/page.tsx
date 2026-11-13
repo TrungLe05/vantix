@@ -108,12 +108,6 @@ export default function AdminVenuesPage() {
         </Button>
       </div>
 
-      <p className="rounded-xl border border-border bg-background px-4 py-3 text-sm leading-6 text-muted-foreground">
-        Venue listing and creation use the live API. The backend does not yet
-        support editing, deletion, neighborhoods, or event counts, so those
-        fields are not mocked.
-      </p>
-
       {successMessage ? (
         <p
           role="status"

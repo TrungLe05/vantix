@@ -80,6 +80,7 @@ app:
       - GET /api/events
       - GET /api/events/*
       - GET /api/events/*/seat-map
+      - GET /api/orders/events/*/availability
     password-change-allowlist:
       - PATCH /api/auth/change-password
       - POST /api/auth/logout

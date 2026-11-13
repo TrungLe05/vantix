@@ -43,6 +43,7 @@ export interface Seat {
   seatNumber: string;
   displayLabel: string;
   ticketType: { id: string; name: string; price: number } | null;
+  status: "ACTIVE" | "INACTIVE";
 }
 
 export interface SeatMap {

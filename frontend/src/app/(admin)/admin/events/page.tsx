@@ -24,11 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getEvents } from "@/lib/api/events";
-import {
-  adminEventMocks,
-  type AdminEventStatus,
-} from "@/lib/mocks/admin-events";
+import { getAllAdminEvents, type AdminEventStatus } from "@/lib/api/admin-events";
 
 type DateFilter = "any" | "this-week" | "this-month" | `month:${string}`;
 
@@ -59,8 +55,6 @@ type DashboardEvent = {
   startAt: string;
   ticketSummary: string;
   status: AdminEventStatus;
-  salesWindow: string;
-  isMock: boolean;
 };
 
 function formatEventDate(value: string) {
@@ -117,43 +111,27 @@ export default function AdminEventsPage() {
   const [date, setDate] = useState<DateFilter>("any");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const publishedQuery = useQuery({
-    queryKey: ["admin", "published-events"],
-    queryFn: () => getEvents(0, 100),
+  const eventsQuery = useQuery({
+    queryKey: ["admin", "events"],
+    queryFn: getAllAdminEvents,
   });
 
   const events = useMemo<DashboardEvent[]>(() => {
-    const published = (publishedQuery.data?.content ?? []).map((event) => ({
+    return (eventsQuery.data ?? []).map((event) => ({
       id: event.id,
       name: event.name,
-      venueName: event.venue.name,
-      venueArea: event.venue.city,
+      venueName: event.venue?.name ?? "—",
+      venueArea: event.venue?.city ?? "—",
       startAt: event.startAt,
       ticketSummary:
         event.minPrice === null
-          ? "Price unavailable"
-          : `From $${event.minPrice.toFixed(2)}`,
-      status: "PUBLISHED" as const,
-      salesWindow: "Not provided",
-      isMock: false,
+          ? "—"
+          : event.minPrice === 0
+            ? "Free"
+            : `From $${event.minPrice.toFixed(2)}`,
+      status: event.status,
     }));
-    const fixtures = adminEventMocks
-      .filter((event) => event.status !== "PUBLISHED")
-      .map((event) => ({
-        id: event.id,
-        name: event.name,
-        venueName: event.venueName,
-        venueArea: event.venueArea,
-        startAt: event.startAt,
-        ticketSummary: event.ticketTypeCount
-          ? `${event.ticketTypeCount} sample ticket types`
-          : "None",
-        status: event.status,
-        salesWindow: event.salesWindow,
-        isMock: true,
-      }));
-    return [...published, ...fixtures];
-  }, [publishedQuery.data]);
+  }, [eventsQuery.data]);
 
   const filteredEvents = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("vi");
@@ -216,7 +194,7 @@ export default function AdminEventsPage() {
         </Button>
       </div>
 
-      {publishedQuery.isError ? (
+      {eventsQuery.isError ? (
         <div
           role="alert"
           className="flex flex-col gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
@@ -224,10 +202,10 @@ export default function AdminEventsPage() {
           <div className="flex items-start gap-3 text-destructive">
             <WifiOff aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
             <div>
-              <p className="font-semibold">Could not load live events</p>
+              <p className="font-semibold">Could not load events</p>
               <p className="mt-1 text-destructive/80">
-                {publishedQuery.error instanceof Error
-                  ? publishedQuery.error.message
+                {eventsQuery.error instanceof Error
+                  ? eventsQuery.error.message
                   : "Check your connection and try again."}
               </p>
             </div>
@@ -235,7 +213,7 @@ export default function AdminEventsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => publishedQuery.refetch()}
+            onClick={() => eventsQuery.refetch()}
           >
             Retry
           </Button>
@@ -358,7 +336,7 @@ export default function AdminEventsPage() {
                 : `${statusLabel[status]} events`}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {publishedQuery.isPending
+              {eventsQuery.isPending
                 ? "Loading…"
                 : `${filteredEvents.length} events found`}
             </p>
@@ -368,7 +346,7 @@ export default function AdminEventsPage() {
           </p>
         </div>
 
-        {publishedQuery.isPending ? (
+        {eventsQuery.isPending ? (
           <div role="status" aria-live="polite" className="space-y-3 p-5">
             <span className="sr-only">Loading events…</span>
             {[0, 1, 2].map((i) => (
@@ -402,7 +380,7 @@ export default function AdminEventsPage() {
           </div>
         ) : (
           <div className="max-h-[600px] overflow-auto">
-            <table className="w-full min-w-[920px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[760px] border-collapse text-left text-sm">
               <thead className="sticky top-0 z-10 bg-muted/90 text-xs uppercase tracking-wide text-muted-foreground backdrop-blur">
                 <tr>
                   <th scope="col" className="px-5 py-3 font-semibold">
@@ -416,9 +394,6 @@ export default function AdminEventsPage() {
                   </th>
                   <th scope="col" className="px-5 py-3 font-semibold">
                     Status
-                  </th>
-                  <th scope="col" className="px-5 py-3 font-semibold">
-                    Sales window
                   </th>
                   <th
                     scope="col"
@@ -460,9 +435,6 @@ export default function AdminEventsPage() {
                         {statusLabel[event.status]}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-xs text-muted-foreground">
-                      {event.salesWindow}
-                    </td>
                     <td className="px-5 py-4 text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger className="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -473,7 +445,7 @@ export default function AdminEventsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
                           <DropdownMenuItem
-                            disabled={event.isMock}
+                            disabled={event.status === "DRAFT"}
                             onClick={() =>
                               router.push(`/admin/events/${event.id}`)
                             }
@@ -482,7 +454,7 @@ export default function AdminEventsPage() {
                             View
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            disabled={event.isMock}
+                            disabled={event.status === "DRAFT"}
                             onClick={() =>
                               router.push(`/admin/events/${event.id}/edit`)
                             }

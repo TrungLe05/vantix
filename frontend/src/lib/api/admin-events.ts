@@ -1,6 +1,19 @@
 import { apiClient } from "./client";
-import type { ApiResponse } from "@/types/common";
-import type { EventDetail } from "@/types/events";
+import type { ApiResponse, PaginatedResponse } from "@/types/common";
+import type { EventDetail, EventVenue } from "@/types/events";
+
+export type AdminEventStatus = "DRAFT" | "PUBLISHED" | "CANCELLED";
+
+export interface AdminEventSummary {
+  id: string;
+  name: string;
+  startAt: string;
+  endAt: string;
+  status: AdminEventStatus;
+  bannerImageUrl: string | null;
+  minPrice: number | null;
+  venue: EventVenue | null;
+}
 
 export interface AdminEvent {
   id: string;
@@ -43,6 +56,26 @@ export interface AdminSeat {
   rowLabel: string;
   seatNumber: string;
   displayLabel: string;
+}
+
+export async function getAdminEvents(page = 0, size = 100) {
+  const response = await apiClient.get<
+    ApiResponse<PaginatedResponse<AdminEventSummary>>
+  >("/events/admin/list", { params: { page, size } });
+  if (!response.data.result) throw new Error("Could not retrieve admin events");
+  return response.data.result;
+}
+
+export async function getAllAdminEvents() {
+  const firstPage = await getAdminEvents();
+  if (firstPage.totalPages <= 1) return firstPage.content;
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+      getAdminEvents(index + 1),
+    ),
+  );
+  return [firstPage, ...remainingPages].flatMap((page) => page.content);
 }
 
 export async function createAdminEvent(request: CreateAdminEventRequest) {

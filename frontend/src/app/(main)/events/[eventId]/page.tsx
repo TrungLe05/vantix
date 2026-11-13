@@ -4,12 +4,14 @@ import Link from "next/link";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  AlertCircle,
   CalendarDays,
   ExternalLink,
   MapPin,
+  LoaderCircle,
   Minus,
   Plus,
   Ticket,
@@ -21,6 +23,7 @@ import {
 } from "@/components/events/EventHeader";
 import { getEvent } from "@/lib/api/events";
 import { getErrorMessage } from "@/lib/api/client";
+import { createOrder } from "@/lib/api/orders";
 import type { TicketType } from "@/types/events";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -42,7 +45,14 @@ export default function EventDetailPage() {
     queryFn: () => getEvent(params.eventId),
   });
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [checkoutMessage, setCheckoutMessage] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const createCart = useMutation({
+    mutationFn: () => createOrder(params.eventId, gaTickets
+      .filter((ticket) => (quantities[ticket.id] ?? 0) > 0)
+      .map((ticket) => ({ ticketTypeId: ticket.id, quantity: quantities[ticket.id] }))),
+    onSuccess: (order) => router.push(`/orders/${order.id}`),
+    onError: (error) => setCheckoutError(getErrorMessage(error, "Some tickets are no longer available. No tickets were held. Please update your selection.")),
+  });
 
   const changeQuantity = (ticket: TicketType, delta: number) =>
     setQuantities((current) => ({
@@ -94,7 +104,7 @@ export default function EventDetailPage() {
         </Link>
         {isPending ? (
           <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_360px]">
-            <div className="h-[420px] animate-pulse rounded-xl bg-muted" />
+            <div className="h-105 animate-pulse rounded-xl bg-muted" />
             <div className="h-96 animate-pulse rounded-xl bg-muted" />
           </div>
         ) : null}
@@ -293,22 +303,14 @@ export default function EventDetailPage() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setCheckoutMessage(true)}
-                    disabled={selectedGaCount === 0}
-                    className="mt-6 min-h-12 w-full rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                    onClick={() => { setCheckoutError(null); createCart.mutate(); }}
+                    disabled={selectedGaCount === 0 || createCart.isPending}
+                    className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
                   >
-                    Continue · {selectedGaCount} tickets
+                    {createCart.isPending ? <><LoaderCircle aria-hidden="true" className="size-4 animate-spin" />Holding tickets…</> : `Continue · ${selectedGaCount} tickets`}
                   </button>
                 )}
-                {checkoutMessage ? (
-                  <p
-                    role="status"
-                    className="mt-3 text-sm text-muted-foreground"
-                  >
-                    Checkout will be available soon. Your selections are still shown on
-                    this page.
-                  </p>
-                ) : null}
+                {checkoutError ? <div role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm"><AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-destructive" /><span>{checkoutError}</span></div> : null}
               </aside>
             </div>
           </>

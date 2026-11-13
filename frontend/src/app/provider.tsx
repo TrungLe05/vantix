@@ -8,6 +8,7 @@ import {
   ACCESS_DENIED_EVENT,
   SERVER_ERROR_EVENT,
   apiClient,
+  refreshAccessToken,
 } from "@/lib/api/client";
 import { useAuthStore } from "@/store/auth-store";
 
@@ -29,20 +30,22 @@ function ApiErrorRedirector() {
 }
 
 function AuthHydrator({ children }: { children: React.ReactNode }) {
-  const { isHydrated, setHydrated, setSession } = useAuthStore();
+  const { isHydrated, setHydrated } = useAuthStore();
 
   useEffect(() => {
-    apiClient
-      .post("/auth/refresh")
-      .then((res) => {
-        const { auth, user } = res.data.result;
-        setSession(auth.accessToken, user);
-      })
+    let mounted = true;
+    refreshAccessToken()
       .catch(() => {
         // Missing or expired cookies mean the visitor is signed out, not that the app failed.
+        useAuthStore.getState().clear();
       })
-      .finally(() => setHydrated());
-  }, [setHydrated, setSession]);
+      .finally(() => {
+        if (mounted) setHydrated();
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [setHydrated]);
 
   // Wait for the auth state before rendering children to avoid a signed-out flash before refresh completes.
   if (!isHydrated) return null;

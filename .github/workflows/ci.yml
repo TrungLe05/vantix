@@ -38,7 +38,7 @@ jobs:
       - name: Lọc theo đường dẫn
         id: filter
         if: github.event_name != 'workflow_dispatch'
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             backend:

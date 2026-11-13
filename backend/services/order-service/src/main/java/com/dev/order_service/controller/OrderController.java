@@ -7,18 +7,23 @@ import com.dev.order_service.dto.request.CreateOrderRequest;
 import com.dev.order_service.dto.request.UpdateOrderItemQuantityRequest;
 import com.dev.order_service.dto.response.AvailabilityResponse;
 import com.dev.order_service.dto.response.OrderResponse;
+import com.dev.order_service.dto.response.PageResponse;
 import com.dev.order_service.service.OrderService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
 
 @RestController
+@Validated
 @RequestMapping("/orders")
 @RequiredArgsConstructor
 public class OrderController {
@@ -38,9 +43,14 @@ public class OrderController {
 
     @GetMapping
     @PreAuthorize("hasRole('BUYER')")
-    public ApiResponse<List<OrderResponse>> list() {
-        return ApiResponse.<List<OrderResponse>>builder()
-                .result(orderService.getOrders(SecurityUtils.getCurrentUserId()))
+    public ApiResponse<PageResponse<OrderResponse>> list(
+            // Lặp lại hoặc phân tách dấu phẩy: ?status=CART&status=EXPIRED hoặc ?status=CART,EXPIRED
+            @RequestParam(required = false, name = "status") List<String> statuses,
+            @RequestParam(defaultValue = "0", name = "page") @Min(0) int page,
+            @RequestParam(defaultValue = "20", name = "size") @Min(1) @Max(100) int size
+    ) {
+        return ApiResponse.<PageResponse<OrderResponse>>builder()
+                .result(orderService.getOrders(SecurityUtils.getCurrentUserId(), statuses, page, size))
                 .build();
     }
 

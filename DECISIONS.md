@@ -27,6 +27,7 @@
 | D21 | Integration test dùng Postgres/Redis thật: compose local, service container ở CI | Chốt |
 | D22 | OTP nguyên tử: Lua script cho verify, `SET NX` cho cooldown | Chốt |
 | D23 | Order: thứ tự khóa Order → Hold, khóa theo id, job expire `SKIP LOCKED` | Chốt |
+| D24 | Tối đa 10 vé mỗi Order (cấu hình được) | Chốt tạm — chờ chủ sản phẩm xác nhận con số |
 
 ---
 
@@ -105,3 +106,6 @@ Trước đây `verify()` đọc JSON, so khớp, rồi ghi lại `attemptCount`
 
 ### D23 — Thứ tự khóa khi expire/hủy Order
 Integration test song song (job `expireDueOrders` + `GET /orders` + `GET /orders/{id}` + availability cùng gặp một Order quá hạn) phát hiện hai lỗi: (1) `getActiveOrders`/`cancelUnpaidOrdersForEvent` nạp Order không khóa rồi mới khóa lại → persistence context giữ bản cũ → `ObjectOptimisticLockingFailureException` (500); (2) availability khóa Hold rồi tới Order, job khóa Order rồi tới Hold → deadlock. Chốt: chỉ lấy id, khóa Order theo id tăng dần, kiểm tra lại trạng thái sau khóa; luôn Order → Hold; job dùng SKIP LOCKED. Cân nhắc khác: retry khi optimistic lock fail (che lỗi, vẫn có deadlock), advisory lock theo event cho mọi đường đọc (tuần tự hóa availability — quá đắt). Giới hạn: job xử lý một lô trong một transaction; lô lớn giữ khóa lâu hơn (chấp nhận ở quy mô hiện tại).
+
+### D24 — Giới hạn số vé mỗi Order
+Roadmap/design P3 không quy định con số; trước đây không có giới hạn (một buyer giữ được toàn bộ kho GA trong 10 phút). Chọn **10 vé/Order**, cấu hình bằng `app.order.max-tickets-per-order` (biến môi trường `ORDER_MAX_TICKETS_PER_ORDER`), tính tổng quantity mọi item ACTIVE (ghế + GA). Lý do: đủ cho nhóm bạn/gia đình, nằm trong khoảng 4–10 các nền tảng bán vé phổ biến áp dụng cho sự kiện thường, và làm chậm hành vi gom vé trước khi có bot-detection (P6). Kiểm tra trong transaction đã khóa Order nên không vượt được bằng request song song; request tự vượt bị chặn trước khi gọi Product. Giới hạn hiện tại: theo Order (= theo buyer × event vì mỗi buyer tối đa một CART/event), chưa theo buyer qua nhiều Order PENDING_PAYMENT/PAID — cần xem lại khi có P4. Frontend chưa biết con số, chỉ hiển thị message lỗi `4012`.

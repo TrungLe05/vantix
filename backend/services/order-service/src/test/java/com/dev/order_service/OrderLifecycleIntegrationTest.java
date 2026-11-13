@@ -88,7 +88,7 @@ class OrderLifecycleIntegrationTest extends AbstractOrderIT {
         assertThat(heldGa()).isZero();
         assertThat(activeSeatHolds(seatIds.get(0))).isZero();
         assertThat(redis.hasKey("order:hold:seat:" + seatIds.get(0))).isFalse();
-        assertThat(orderService.getOrders(buyer)).isEmpty();
+        assertThat(orderService.getOrders(buyer, null, 0, 20).getContent()).isEmpty();
     }
 
     @Test
@@ -184,6 +184,7 @@ class OrderLifecycleIntegrationTest extends AbstractOrderIT {
 
     @Test
     void quantityUpdateValidatesTargetAndCategory() {
+        catalog(1, 4); // tồn GA nhỏ hơn giới hạn vé/Order để kiểm tra nhánh hết tồn (4006)
         UUID buyer = UUID.randomUUID();
         OrderResponse cart = createCart(buyer, key(), seat(0), ga(2));
         UUID seatItem = cart.getItems().stream().filter(i -> "SEATED".equals(i.getCategory()))
@@ -191,7 +192,7 @@ class OrderLifecycleIntegrationTest extends AbstractOrderIT {
 
         assertError(() -> orderService.updateItemQuantity(buyer, cart.getId(), gaItemId(cart), 0), 4007);
         assertError(() -> orderService.updateItemQuantity(buyer, cart.getId(), seatItem, 2), 4007);
-        assertError(() -> orderService.updateItemQuantity(buyer, cart.getId(), gaItemId(cart), 11), 4006);
+        assertError(() -> orderService.updateItemQuantity(buyer, cart.getId(), gaItemId(cart), 5), 4006);
         assertThat(heldGa()).isEqualTo(2);
     }
 

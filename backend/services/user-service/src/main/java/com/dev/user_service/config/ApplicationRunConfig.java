@@ -1,6 +1,5 @@
 package com.dev.user_service.config;
 
-import com.dev.commonlibjwt.jwt.JwtProperties;
 import com.dev.user_service.entities.User;
 import com.dev.user_service.enums.UserRole;
 import com.dev.user_service.enums.UserStatus;
@@ -33,10 +32,20 @@ public class ApplicationRunConfig implements ApplicationRunner {
     @Value("${app.run-config.default-staff.password}")
     private String staffPassword;
 
+    @Value("${app.run-config.default-buyer.password}")
+    private String buyerPassword;
+
+    private static final String EMAIL_DOMAIN = "@gmail.com";
     @Override
     public void run(ApplicationArguments args) {
         seedIfAbsent(adminUsername, adminPassword, UserRole.ADMIN);
         seedIfAbsent(staffUsername, staffPassword, UserRole.STAFF);
+
+//      seed 5 buyer
+        for(int i = 0; i <= 4; i++){
+            String email = "buyer" + i + EMAIL_DOMAIN;
+            seedIfAbsent(email, buyerPassword, UserRole.BUYER);
+        }
     }
 
     private void seedIfAbsent(String rawEmail, String rawPassword, UserRole role) {

@@ -68,4 +68,5 @@
 Backlog có trạng thái/PR ở `TASKS.md`; quyết định mới D20–D21 ở `DECISIONS.md`.
 
 - #27 `chore/database-bootstrap` (merged): init script tạo 5 DB. Kiểm chứng: volume mới chạy script tạo đủ 5 DB (log `CREATE DATABASE` ×5); chạy lại trên container compose `postgres` đang có dữ liệu → no-op, exit 0; probe nhánh tạo bằng DB tạm rồi drop.
-- `test/gateway-auth-cors`: log gateway mặc định `INFO`, `DEBUG` theo profile `dev`; integration test gateway (Netty thật + HTTP stub phía sau) 12 case: preflight CORS, 9001/9002/9003, refresh token bị từ chối làm access token, inject/xóa `X-User-*`, allowlist mcp. `mvn clean verify` toàn backend: BUILD SUCCESS.
+- #28 `test/gateway-auth-cors` (merged): log gateway mặc định `INFO`, `DEBUG` theo profile `dev`; integration test gateway (Netty thật + HTTP stub phía sau) 12 case: preflight CORS, 9001/9002/9003, refresh token bị từ chối làm access token, inject/xóa `X-User-*`, allowlist mcp. `mvn clean verify` toàn backend: BUILD SUCCESS.
+- `fix/user-otp-atomic`: OTP verify bằng Lua, cooldown `SET NX` (D22); integration test user-service trên Postgres/Redis thật (15 case: OTP giới hạn/dùng một lần/cooldown kể cả song song, refresh rotation/reuse/song song). CI backend có service container Postgres + Redis và bước tạo DB test.

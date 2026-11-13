@@ -1,0 +1,29 @@
+# Profile integration test (D21): Postgres/Redis thật — local là container compose, CI là service container.
+# DB/role test tạo bởi docker/postgres/test/create-test-databases.sql, tách khỏi DB dev.
+# Secret (JWT, HMAC OTP, mật khẩu seed) sinh ngẫu nhiên trong AbstractUserServiceIT, không đặt ở đây.
+spring:
+  datasource:
+    url: jdbc:postgresql://${IT_DB_HOST:localhost}:${IT_DB_PORT:5432}/users_service_test
+    username: ${IT_DB_USER:vantix_test}
+    password: ${IT_DB_PASSWORD:vantix_test}
+  data:
+    redis:
+      host: ${IT_REDIS_HOST:localhost}
+      port: ${IT_REDIS_PORT:6379}
+      # DB Redis riêng để key test không lẫn với dữ liệu dev ở DB 0
+      database: 15
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: it-client-id
+            client-secret: it-client-placeholder
+app:
+  oauth2:
+    frontend-callback-url: http://localhost:3000/auth-callback
+  run-config:
+    default-admin:
+      username: it-admin@example.com
+    default-staff:
+      username: it-staff@example.com

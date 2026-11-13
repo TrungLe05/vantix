@@ -85,6 +85,17 @@ app:
       - PATCH /api/auth/change-password
       - POST /api/auth/logout
       - GET /api/users/me
+# Mặc định INFO cho mọi môi trường; bật DEBUG khi chạy dev bằng profile "dev"
+# (SPRING_PROFILES_ACTIVE=dev hoặc --spring.profiles.active=dev). Log DEBUG của gateway chỉ ghi
+# loại lỗi token, không ghi token/claim.
+logging:
+  level:
+    com.dev.api_gateway: INFO
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
 logging:
   level:
     com.dev.api_gateway: DEBUG

@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { buyer, login } from "./helpers";
+import { buyer, login, randomSecret } from "./helpers";
 
 test.describe("Tài khoản và phiên đăng nhập", () => {
   test("sai mật khẩu hiển thị lỗi, không vào được", async ({ page }) => {
     await page.goto("/login");
     await page.getByPlaceholder("you@example.com").fill("buyer1@gmail.com");
-    await page.getByPlaceholder("Enter your password").fill("wrong-password-1");
+    await page.getByPlaceholder("Enter your password").fill(randomSecret());
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByRole("alert")).toBeVisible();
     await expect(page).toHaveURL(/\/login/);
@@ -40,7 +40,7 @@ test.describe("Tài khoản và phiên đăng nhập", () => {
     const email = process.env.E2E_MCP_EMAIL;
     const password = process.env.E2E_MCP_PASSWORD;
     test.skip(!email || !password, "Đặt E2E_MCP_EMAIL / E2E_MCP_PASSWORD để chạy");
-    const newPassword = `New${Date.now()}pw`;
+    const newPassword = randomSecret();
 
     await login(page, { email: email!, password: password! });
     await expect(page).toHaveURL(/\/change-password/);
@@ -48,7 +48,7 @@ test.describe("Tài khoản và phiên đăng nhập", () => {
 
     await page.getByLabel("Current password").fill(password!);
     await page.getByLabel("New password", { exact: true }).fill(newPassword);
-    await page.getByLabel("Confirm new password").fill("mismatch1");
+    await page.getByLabel("Confirm new password").fill(randomSecret());
     await page.getByRole("button", { name: "Update password" }).click();
     await expect(page.getByText("The passwords do not match.")).toBeVisible();
 

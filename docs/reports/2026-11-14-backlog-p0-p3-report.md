@@ -21,7 +21,7 @@ Người thực hiện: Claude (agent), theo quy trình tự động trong yêu 
 | [#32](https://github.com/TrungLe05/vantix/pull/32) | Order: phân trang/lọc `GET /orders`, giới hạn 10 vé/Order; frontend đọc `PageResponse` | ✅ merged |
 | [#33](https://github.com/TrungLe05/vantix/pull/33) | Outbox: backoff lũy thừa, dead-letter, gauge; sửa publisher product kẹt | ✅ merged |
 | [#34](https://github.com/TrungLe05/vantix/pull/34) | k6 script vào repo, `invariants.sql`, khuyến nghị OR08 | ✅ merged |
-| `test/e2e-playwright` | Playwright E2E; sửa consumer Kafka order-service và trang `/change-password` | xem PR |
+| [#35](https://github.com/TrungLe05/vantix/pull/35) | Playwright E2E; sửa consumer Kafka order-service và trang `/change-password` | xem PR |
 
 ## 3. Lỗi phát hiện và đã sửa
 

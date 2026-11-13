@@ -27,3 +27,6 @@ export function localDateTime(offsetMinutes: number): string {
 }
 
 export const uniqueName = (prefix: string) => `${prefix} ${Date.now().toString(36)}`;
+
+/** Giá trị sinh lúc chạy (đủ chữ + số theo rule backend) — không để chuỗi giống mật khẩu cứng trong repo. */
+export const randomSecret = () => `${crypto.randomUUID().replaceAll("-", "")}A1`;

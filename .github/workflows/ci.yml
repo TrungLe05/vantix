@@ -182,7 +182,7 @@ jobs:
 
       # Tài khoản cá nhân dùng miễn phí; repo thuộc organization cần secret GITLEAKS_LICENSE
       - name: Gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -529,7 +529,7 @@ Validation từng phần tử: mục 3. `displayLabel` **không** nhận từ cl
 
 1. Tải event (`3101`) → check `DRAFT` (`3102`) → tải seat map (`3202`).
 2. Kiểm tra trùng lặp **trong chính payload** (so sánh bộ ba `section+rowLabel+seatNumber`) → `3203` nếu có, liệt kê rõ phần tử trùng trong `message`.
-3. Trong **một transaction**: insert toàn bộ, mỗi dòng tự sinh `displayLabel`. Bắt `DataIntegrityViolationException` (trùng với ghế đã tồn tại từ trước, lớp chặn cuối qua unique index `(seat_map_id, section, row_label, seat_number)`) → map thành `3203`, rollback toàn bộ batch.
+3. Trong **một transaction**: insert toàn bộ (`saveAllAndFlush` — flush ngay để lỗi unique nổ trong service, không phải lúc commit), mỗi dòng tự sinh `displayLabel`. Bắt `DataIntegrityViolationException` (trùng với ghế đã tồn tại từ trước, lớp chặn cuối qua unique index `(seat_map_id, section, row_label, seat_number)`) → map thành `3203`, rollback toàn bộ batch.
 4. Trả 201 kèm danh sách ghế vừa tạo (để ADMIN lấy `id` dùng ngay cho PR12).
 
 ---
@@ -613,9 +613,9 @@ Validation từng phần tử: mục 3. `displayLabel` **không** nhận từ cl
 **Các bước thực thi**
 
 1. Tải event (`3101`) → check `DRAFT` (`3102`).
-2. Validate field-level + theo `category` (`1001`, `3302`, `3303`).
+2. Validate field-level + theo `category` (`1001` khi gửi `totalQuantity` với SEATED hoặc `seatIds` với GA, `3302`, `3303`). `seatIds` lặp được gộp trước khi kiểm tra.
 3. Nếu SEATED: tải toàn bộ `Seat` theo `seatIds` — thiếu bất kỳ id nào → `3204`; id thuộc `SeatMap` không gắn với event trong path → `3206`; id có `ticket_type_id` khác null → `3205`.
-4. Trong một transaction: insert `ticket_types` (`total_quantity = seatIds.size()` nếu SEATED, hoặc giá trị nhập tay nếu GA); nếu SEATED, `UPDATE seats SET ticket_type_id = :newId WHERE id IN (:seatIds)`.
+4. Trong một transaction: insert `ticket_types` (`total_quantity = seatIds.size()` nếu SEATED, hoặc giá trị nhập tay nếu GA); nếu SEATED, gán **nguyên tử** `UPDATE seats SET ticket_type_id = :newId WHERE seat_map_id = :mapId AND id IN (:seatIds) AND ticket_type_id IS NULL` — số dòng cập nhật khác số ghế (request khác vừa gán) → `3205`, rollback cả ticket type. Kiểm tra ở bước 3 chỉ để báo lỗi sớm.
 5. Trả 201.
 
 ---

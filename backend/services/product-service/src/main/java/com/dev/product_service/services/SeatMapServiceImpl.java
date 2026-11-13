@@ -86,8 +86,10 @@ public class SeatMapServiceImpl implements SeatMapService {
 
         List<Seat> saved;
         try {
-            // saveAll trong cùng transaction — lỗi ở bất kỳ dòng nào rollback toàn bộ batch (tất-cả-hoặc-không-gì)
-            saved = seatRepository.saveAll(seats);
+            // saveAllAndFlush trong cùng transaction — lỗi ở bất kỳ dòng nào rollback toàn bộ batch.
+            // Phải flush ngay tại đây: nếu để Hibernate flush lúc commit, unique violation nổ ngoài
+            // try/catch và rơi vào handler chung (1005) thay vì 3203
+            saved = seatRepository.saveAllAndFlush(seats);
         } catch (DataIntegrityViolationException e) {
             // Lớp chặn cuối: trùng với ghế đã tồn tại từ trước (không nằm trong chính payload này)
             throw new AppException(ProductErrorCode.DUPLICATE_SEAT);

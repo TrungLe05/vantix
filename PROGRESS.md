@@ -6,7 +6,7 @@
 
 | Phase | Nội dung | Trạng thái | Ghi chú |
 |---|---|---|---|
-| P0 | Hạ tầng, khung 8 service, CI | ✅ Xong | Compose chưa tự tạo DB; `docker-compose.prod.yml`, `Dockerfile` gốc rỗng |
+| P0 | Hạ tầng, khung 8 service, CI | ✅ Xong | Compose tự tạo 5 DB khi volume trống (init script); `docker-compose.prod.yml`, `Dockerfile` gốc rỗng |
 | P1 | User & Auth | ✅ Xong | 14 API, manual test; chưa có test tự động |
 | P2 | Product (catalog) | ✅ Xong phần API | 14 API (PR01–PR14); thiếu test, bootstrap DB |
 | P3 | Order: giỏ, hold, chống bán trùng | 🟡 Đã code | 9 API (OR01–OR08, OR05A) + UI; còn E2E, k6, test |
@@ -62,3 +62,9 @@
 - Outbox chưa có DLQ/alerting; user-service vẫn có thể mất event Kafka.
 - Đã gỡ log nhạy cảm (fingerprint JWT secret, message DB chứa giá trị vi phạm, message JJWT, message lỗi OAuth2); secret có thể đã xuất hiện trong log dev cũ.
 - Cổng service còn truy cập trực tiếp được ở dev (Trust-The-Gateway cần network isolation ở P9).
+
+## Đợt xử lý backlog P0–P3 (13/11/2026)
+
+Backlog có trạng thái/PR ở `TASKS.md`; quyết định mới D20–D21 ở `DECISIONS.md`.
+
+- `chore/database-bootstrap`: init script tạo 5 DB. Kiểm chứng: volume mới chạy script tạo đủ 5 DB (log `CREATE DATABASE` ×5); chạy lại trên container compose `postgres` đang có dữ liệu → no-op, exit 0; probe nhánh tạo bằng DB tạm rồi drop.

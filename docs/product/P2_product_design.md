@@ -18,7 +18,7 @@
 | 7 | Số lượng (`total_quantity`) trên `TicketType`: với GA là số nhập tay (kho vé); với SEATED là **giá trị dẫn xuất** từ số ghế thực tế được gán vào hạng vé đó, không nhập tay riêng — tránh hai nguồn sự thật lệch nhau |
 | 8 | API đọc catalog (danh sách/chi tiết sự kiện) là **công khai**, không cần đăng nhập — duyệt sự kiện giống một trang thương mại điện tử thông thường. Chỉ hành động mua/giữ chỗ (Order, P3) mới cần JWT |
 | 9 | API ghi (tạo/sửa sự kiện, sơ đồ ghế, hạng vé) chỉ **ADMIN** — theo đúng mô hình Trust-The-Gateway đã dùng ở P1 (đọc `X-User-Role` do Gateway inject) |
-| 10 | `product-service` dùng database Postgres riêng. Theo cấu hình code hiện tại, tên database là `products_service`; cần bootstrap DB trước khi Flyway chạy (compose hiện chưa tạo DB này tường minh). |
+| 10 | `product-service` dùng database Postgres riêng. Theo cấu hình code hiện tại, tên database là `products_service`; DB được tạo bởi `docker/postgres/init/01-create-databases.sql` khi volume Postgres còn trống (volume cũ chạy tay script, xem README). |
 
 ---
 

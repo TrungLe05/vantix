@@ -2,28 +2,33 @@
 
 > Cập nhật: 13/11/2026. Ưu tiên: 🔴 cao (chặn phase hiện tại) · 🟠 trung bình · ⚪ thấp. Đánh dấu `[x]` khi xong và cập nhật `PROGRESS.md`.
 
-## Đang làm — hoàn tất P3 Order
+## Backlog P0–P3 (đối chiếu code 13/11/2026)
 
-- [ ] 🔴 Chạy PostgreSQL/Redis/Kafka end-to-end cho luồng tạo hold → thêm → sửa GA → confirm → hết hạn → hủy event.
-- [ ] 🔴 Chạy k6 `backend/services/order-service/k6/seat-contention.js` (cùng seat và GA), lưu kết quả: cấu hình tải, commit, môi trường, invariant cuối (≤ 1 hold/ghế, GA không vượt tổng), expiry lag.
-- [ ] 🔴 Test concurrency/integration cho order-service (Testcontainers PostgreSQL + Redis): tranh ghế, tranh GA, idempotency replay/conflict, expire nhả tồn đúng một lần, consumer hủy event lặp.
-- [ ] 🟠 Unit test `CatalogValidationService`, `OrderCommandService` (state transition).
-- [ ] 🟠 Giới hạn số vé tối đa mỗi request/Order.
-- [ ] 🟠 Phân trang/lọc status cho `GET /orders`.
-- [ ] 🟠 DLQ/alerting cho outbox (`order_event_outbox`, `event_outbox`), backoff thay vì cố định 5 giây.
-- [ ] ⚪ Quyết định có dùng OR08 (hủy giỏ) ở frontend không.
+Trạng thái: `TODO` · `IN_PROGRESS` · `IN_REVIEW` · `BLOCKED` · `DONE`. Môi trường kiểm chứng local: container của `docker compose up -d` (project `vantix`), **không** pull image/tạo container mới — nên Testcontainers và k6 qua Docker không chạy local (xem D21).
 
-## Nợ P0–P2
-
-- [ ] 🔴 Bootstrap database trong Compose (init script tạo `users_service`, `products_service`, `orders_service`, `payments_service`, `notifications_service`).
-- [ ] 🟠 Test product-service: publish validation (gom lý do), PR10 all-or-nothing, PR12 ràng buộc seat, ẩn DRAFT.
-- [ ] 🟠 Test user-service: refresh rotation/reuse detection, OTP attempts/cooldown, mcp allowlist ở Gateway.
-- [x] Gỡ log fingerprint JWT secret trong `JwtUtils`; log DataIntegrityViolation, token bị từ chối ở Gateway, lỗi OAuth2 chỉ còn loại lỗi/mã lỗi (13/11/2026).
-- [x] Sửa `.env.example` theo biến code đang đọc, thêm `frontend/.env.example`, bỏ chặn `.env.example` trong `.gitignore` (13/11/2026).
-- [ ] 🟠 Rà soát bí mật cũ đã từng bị log (fingerprint JWT secret): nếu log dev có thể đã chia sẻ, đổi `JWT_SECRET_KEY`.
-- [ ] ⚪ Hạ `logging.level.com.dev.api_gateway` từ `DEBUG` về `INFO` khi deploy (P9, tách theo profile).
-- [ ] ⚪ OTP nguyên tử bằng `INCR`/Lua (giới hạn đã biết của P1).
-- [ ] ⚪ Kiểm chứng preflight `OPTIONS` qua Gateway.
+| # | Hạng mục | Ưu tiên | Trạng thái | PR | Ghi chú |
+|---|---|---|---|---|---|
+| A1 | Init script tạo 5 DB trong Compose | 🔴 | IN_REVIEW | chore/database-bootstrap | `docker/postgres/init/01-create-databases.sql`, idempotent, chỉ tự chạy khi volume trống |
+| A2 | Service kết nối đúng DB (Flyway chạy) | 🔴 | TODO | — | Kiểm chứng khi chạy integration test/E2E với DB thật |
+| D1 | Gỡ log fingerprint JWT secret (`JwtUtils`) | 🔴 | DONE | trước đợt này | Chỉ còn log TTL |
+| D2 | Log `DataIntegrityViolation`, token bị từ chối, lỗi OAuth2 chỉ còn loại/mã lỗi | 🔴 | DONE | trước đợt này | Đã rà `BaseGlobalExceptionHandler`, `JwtAuthenticationGlobalFilter`, `OAuth2LoginFailureHandler` |
+| D3 | Đánh giá rotate `JWT_SECRET_KEY` (fingerprint từng bị log) | 🟠 | BLOCKED | — | Cần chủ repo xác nhận log dev cũ có từng chia sẻ/công khai không; không đọc `.env` |
+| E1 | `.env.example` khớp biến code, `frontend/.env.example`, bỏ ignore `.env.example` | 🟠 | DONE | trước đợt này | |
+| F1 | Gateway log `DEBUG` → `INFO` mặc định, `DEBUG` theo profile `dev` | ⚪ | TODO | — | |
+| C5 | Test mcp allowlist ở Gateway | 🟠 | TODO | — | |
+| C6 | Test preflight `OPTIONS` qua Gateway | ⚪ | TODO | — | |
+| C1 | Test refresh rotation + reuse detection | 🟠 | TODO | — | |
+| C3 | Test OTP attempts/cooldown | 🟠 | TODO | — | |
+| G1 | OTP nguyên tử (`INCR`/Lua) + test concurrency | ⚪ | TODO | — | |
+| B1 | Test product: publish gom lý do, PR10 all-or-nothing, PR12 seat, ẩn DRAFT | 🟠 | TODO | — | |
+| P3-D1 | Unit test `CatalogValidationService`, `OrderCommandService` | 🟠 | TODO | — | |
+| P3-D2 | Giới hạn số vé tối đa mỗi request/Order (cấu hình được) | 🟠 | TODO | — | |
+| P3-D3 | Phân trang + lọc status `GET /orders` | 🟠 | TODO | — | Không phá contract frontend hiện tại |
+| P3-C | Integration/concurrency order: tranh ghế, tranh GA, idempotency replay/conflict, expire đúng một lần, consumer hủy event lặp | 🔴 | TODO | — | Postgres/Redis thật (compose local, service container ở CI) |
+| P3-A | E2E vòng đời đơn: hold → thêm → sửa GA → confirm → hết hạn → hủy event | 🔴 | TODO | — | |
+| P3-B | k6 `seat-contention.js` + kết quả trong `k6/results/` | 🔴 | BLOCKED | — | Máy chưa có `k6`, không được pull image `grafana/k6`; thư mục `k6/` đang bị `.gitignore` chặn toàn bộ |
+| P3-D4 | DLQ/alerting outbox, backoff thay chu kỳ cố định | 🟠 | TODO | — | |
+| P3-D5 | Đánh giá dùng OR08 (hủy giỏ) ở frontend | ⚪ | TODO | — | Chỉ khuyến nghị, không tự triển khai |
 
 ## Tài liệu
 

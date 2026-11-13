@@ -7,6 +7,8 @@ services:
     restart: always
     volumes:
       - pg_data:/var/lib/postgresql/data
+      # Tạo DB cho các service khi volume còn trống (chạy tay lại được, xem script)
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     ports:
       - "5432:5432"
     healthcheck:

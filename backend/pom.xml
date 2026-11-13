@@ -44,11 +44,11 @@
 		<spring-cloud.version>2025.1.2</spring-cloud.version>
 		<spring-cloud-openfeign.version>5.0.2</spring-cloud-openfeign.version>
 		<lombok.version>1.18.42</lombok.version>
-		<jjwt.version>0.12.6</jjwt.version>
+		<jjwt.version>0.13.0</jjwt.version>
 		<springdoc.version>2.6.0</springdoc.version>
 		<ua-parser.version>1.6.1</ua-parser.version>
 		<project.version>0.0.1-SNAPSHOT</project.version>
-		<jjwt.version>0.12.6</jjwt.version>
+		<jjwt.version>0.13.0</jjwt.version>
 		<selenium.version>4.44.0</selenium.version>
 	</properties>
 

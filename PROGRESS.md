@@ -57,15 +57,15 @@
 
 ## Rủi ro / nợ kỹ thuật
 
-- Test tự động còn ít (đang bổ sung theo backlog); CI `mvn verify` đã chạy integration test gateway.
-- Chưa chứng minh bằng số liệu chống bán trùng (k6) — đây là điểm trọng tâm của dự án.
-- Outbox chưa có DLQ/alerting; user-service vẫn có thể mất event Kafka.
+- Đã có ~100 test tự động (unit + integration trên Postgres/Redis thật, CI dùng service container); chưa có E2E xuyên service.
+- Chưa chứng minh bằng số liệu tải chống bán trùng (k6 sẵn script, chưa có kết quả — P3-B BLOCKED); hiện chỉ có bằng chứng từ integration test song song.
+- Outbox Product/Order đã có backoff + dead-letter + gauge (D25), chưa có rule alert (P9); user-service vẫn có thể mất event Kafka (không dùng outbox).
 - Đã gỡ log nhạy cảm (fingerprint JWT secret, message DB chứa giá trị vi phạm, message JJWT, message lỗi OAuth2); secret có thể đã xuất hiện trong log dev cũ.
 - Cổng service còn truy cập trực tiếp được ở dev (Trust-The-Gateway cần network isolation ở P9).
 
 ## Đợt xử lý backlog P0–P3 (13/11/2026)
 
-Backlog có trạng thái/PR ở `TASKS.md`; quyết định mới D20–D21 ở `DECISIONS.md`.
+Backlog có trạng thái/PR ở `TASKS.md`; quyết định mới D20–D26 ở `DECISIONS.md`.
 
 - #27 `chore/database-bootstrap` (merged): init script tạo 5 DB. Kiểm chứng: volume mới chạy script tạo đủ 5 DB (log `CREATE DATABASE` ×5); chạy lại trên container compose `postgres` đang có dữ liệu → no-op, exit 0; probe nhánh tạo bằng DB tạm rồi drop.
 - #28 `test/gateway-auth-cors` (merged): log gateway mặc định `INFO`, `DEBUG` theo profile `dev`; integration test gateway (Netty thật + HTTP stub phía sau) 12 case: preflight CORS, 9001/9002/9003, refresh token bị từ chối làm access token, inject/xóa `X-User-*`, allowlist mcp. `mvn clean verify` toàn backend: BUILD SUCCESS.
@@ -73,4 +73,5 @@ Backlog có trạng thái/PR ở `TASKS.md`; quyết định mới D20–D21 ở
 - #30 `fix/product-publish-seat-constraints` (merged): integration test product-service qua HTTP (MockMvc + security filter thật) trên Postgres thật, 12 case. Sửa: PR10 `saveAllAndFlush` để trùng ghế đã có trả 3203 (trước là 1005); PR12 gán ghế bằng UPDATE có điều kiện (trước: 8 request song song cùng ghế → 7 thành công); PR12 trả 1001 khi gửi field sai category, gộp `seatIds` lặp.
 - #31 `test/order-concurrency-idempotency` (merged): 39 test mới cho order-service (14 unit `CatalogValidationService`, 12 vòng đời/chuyển trạng thái, 13 concurrency) trên Postgres/Redis thật, product mock. Sửa 2 lỗi test phát hiện khi expire song song: 500 do optimistic lock và deadlock Hold↔Order (D23). Chạy lặp 6 lần liên tiếp đều pass.
 - #32 `feat/order-list-paging-ticket-limit` (merged): OR02 phân trang + lọc status (`PageResponse`), giới hạn 10 vé/Order (`4012`, D24); frontend `getOrders` đọc `result.content`. 8 integration test mới.
-- `feat/outbox-backoff-dead-letter`: backoff lũy thừa + dead-letter + gauge cho `order_event_outbox`/`event_outbox` (migration order V2, product V4), producer `max.block.ms` 10s. Sửa lỗi publisher product đọc `cancelledAt` → trước đây hủy event làm cả outbox kẹt. 11 integration test outbox mới.
+- #33 `feat/outbox-backoff-dead-letter`: backoff lũy thừa + dead-letter + gauge cho `order_event_outbox`/`event_outbox` (migration order V2, product V4), producer `max.block.ms` 10s. Sửa lỗi publisher product đọc `cancelledAt` → trước đây hủy event làm cả outbox kẹt. 11 integration test outbox mới.
+- `docs/order-or08-k6-readiness`: đưa `k6/seat-contention.js` vào repo (trước bị `.gitignore`), sửa threshold GA, thêm `invariants.sql` (5 bất biến + expiry lag, đã chạy thử trên DB test) và README chạy/báo cáo; khuyến nghị OR08 (D26).

@@ -81,4 +81,5 @@ Mọi request từ trình duyệt đi qua Gateway `http://localhost:8999/api/...
 
 - Dữ liệu ML là tự tạo (k6 mô phỏng bot + thao tác thật), không phải dữ liệu production.
 - Stripe chỉ ở chế độ test, tiền tệ USD.
-- Chưa có test tự động đáng kể, chưa có rate limiting, chưa deploy.
+- Integration test cần Postgres/Redis đang chạy (compose) và DB test: `docker exec -i postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres' < docker/postgres/test/create-test-databases.sql`, rồi `cd backend && mvn verify`.
+- Chưa có kết quả k6, chưa có rate limiting, chưa deploy.

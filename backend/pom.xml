@@ -49,7 +49,7 @@
 		<ua-parser.version>1.6.1</ua-parser.version>
 		<project.version>0.0.1-SNAPSHOT</project.version>
 		<jjwt.version>0.12.6</jjwt.version>
-		<selenium.version>4.44.0</selenium.version>
+		<selenium.version>4.52.0</selenium.version>
 	</properties>
 
 	<dependencyManagement>

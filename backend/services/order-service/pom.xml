@@ -30,6 +30,18 @@
 	</properties>
 	<dependencies>
 		<dependency>
+			<groupId>com.dev</groupId>
+			<artifactId>commonlib-api-response</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.dev</groupId>
+			<artifactId>commonlib-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.dev</groupId>
+			<artifactId>commonlib-kafka</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
@@ -58,6 +70,10 @@
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-openfeign</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
@@ -66,6 +82,11 @@
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 

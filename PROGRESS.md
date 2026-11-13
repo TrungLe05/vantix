@@ -57,7 +57,7 @@
 
 ## Rủi ro / nợ kỹ thuật
 
-- Hầu như chưa có test tự động; CI `mvn verify` hiện chủ yếu kiểm tra biên dịch.
+- Test tự động còn ít (đang bổ sung theo backlog); CI `mvn verify` đã chạy integration test gateway.
 - Chưa chứng minh bằng số liệu chống bán trùng (k6) — đây là điểm trọng tâm của dự án.
 - Outbox chưa có DLQ/alerting; user-service vẫn có thể mất event Kafka.
 - Đã gỡ log nhạy cảm (fingerprint JWT secret, message DB chứa giá trị vi phạm, message JJWT, message lỗi OAuth2); secret có thể đã xuất hiện trong log dev cũ.
@@ -67,4 +67,5 @@
 
 Backlog có trạng thái/PR ở `TASKS.md`; quyết định mới D20–D21 ở `DECISIONS.md`.
 
-- `chore/database-bootstrap`: init script tạo 5 DB. Kiểm chứng: volume mới chạy script tạo đủ 5 DB (log `CREATE DATABASE` ×5); chạy lại trên container compose `postgres` đang có dữ liệu → no-op, exit 0; probe nhánh tạo bằng DB tạm rồi drop.
+- #27 `chore/database-bootstrap` (merged): init script tạo 5 DB. Kiểm chứng: volume mới chạy script tạo đủ 5 DB (log `CREATE DATABASE` ×5); chạy lại trên container compose `postgres` đang có dữ liệu → no-op, exit 0; probe nhánh tạo bằng DB tạm rồi drop.
+- `test/gateway-auth-cors`: log gateway mặc định `INFO`, `DEBUG` theo profile `dev`; integration test gateway (Netty thật + HTTP stub phía sau) 12 case: preflight CORS, 9001/9002/9003, refresh token bị từ chối làm access token, inject/xóa `X-User-*`, allowlist mcp. `mvn clean verify` toàn backend: BUILD SUCCESS.

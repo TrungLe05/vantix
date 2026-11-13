@@ -8,15 +8,15 @@ Trạng thái: `TODO` · `IN_PROGRESS` · `IN_REVIEW` · `BLOCKED` · `DONE`. M�
 
 | # | Hạng mục | Ưu tiên | Trạng thái | PR | Ghi chú |
 |---|---|---|---|---|---|
-| A1 | Init script tạo 5 DB trong Compose | 🔴 | IN_REVIEW | chore/database-bootstrap | `docker/postgres/init/01-create-databases.sql`, idempotent, chỉ tự chạy khi volume trống |
+| A1 | Init script tạo 5 DB trong Compose | 🔴 | DONE | #27 | `docker/postgres/init/01-create-databases.sql`, idempotent, chỉ tự chạy khi volume trống |
 | A2 | Service kết nối đúng DB (Flyway chạy) | 🔴 | TODO | — | Kiểm chứng khi chạy integration test/E2E với DB thật |
 | D1 | Gỡ log fingerprint JWT secret (`JwtUtils`) | 🔴 | DONE | trước đợt này | Chỉ còn log TTL |
 | D2 | Log `DataIntegrityViolation`, token bị từ chối, lỗi OAuth2 chỉ còn loại/mã lỗi | 🔴 | DONE | trước đợt này | Đã rà `BaseGlobalExceptionHandler`, `JwtAuthenticationGlobalFilter`, `OAuth2LoginFailureHandler` |
 | D3 | Đánh giá rotate `JWT_SECRET_KEY` (fingerprint từng bị log) | 🟠 | BLOCKED | — | Cần chủ repo xác nhận log dev cũ có từng chia sẻ/công khai không; không đọc `.env` |
 | E1 | `.env.example` khớp biến code, `frontend/.env.example`, bỏ ignore `.env.example` | 🟠 | DONE | trước đợt này | |
-| F1 | Gateway log `DEBUG` → `INFO` mặc định, `DEBUG` theo profile `dev` | ⚪ | TODO | — | |
-| C5 | Test mcp allowlist ở Gateway | 🟠 | TODO | — | |
-| C6 | Test preflight `OPTIONS` qua Gateway | ⚪ | TODO | — | |
+| F1 | Gateway log `DEBUG` → `INFO` mặc định, `DEBUG` theo profile `dev` | ⚪ | IN_REVIEW | test/gateway-auth-cors | `SPRING_PROFILES_ACTIVE=dev` để bật DEBUG |
+| C5 | Test mcp allowlist ở Gateway | 🟠 | IN_REVIEW | test/gateway-auth-cors | `GatewayAuthAndCorsIntegrationTest`: chặn ngoài allowlist (9004), cho phép đúng method+path |
+| C6 | Test preflight `OPTIONS` qua Gateway | ⚪ | IN_REVIEW | test/gateway-auth-cors | Preflight route bảo vệ trả 200 + CORS header không cần token; origin lạ 403 |
 | C1 | Test refresh rotation + reuse detection | 🟠 | TODO | — | |
 | C3 | Test OTP attempts/cooldown | 🟠 | TODO | — | |
 | G1 | OTP nguyên tử (`INCR`/Lua) + test concurrency | ⚪ | TODO | — | |

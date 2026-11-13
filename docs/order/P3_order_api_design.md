@@ -27,6 +27,7 @@
 | 4009 | EVENT_INVENTORY_NOT_READY | 503 | Inventory projection chưa sẵn sàng |
 | 4010 | PRODUCT_SERVICE_UNAVAILABLE | 503 | Không thể xác minh event/ticket từ Product |
 | 4011 | IDEMPOTENCY_KEY_REQUIRED | 400 | Thiếu key hoặc key dài hơn 128 ký tự |
+| 4012 | TICKET_LIMIT_EXCEEDED | 400 | Tổng vé ACTIVE của Order sau thao tác vượt `app.order.max-tickets-per-order` (mặc định 10, D24) |
 
 ## 2. Payload
 
@@ -75,12 +76,16 @@ Timestamp ISO-8601 UTC; null fields theo convention response. `status` của Ord
 ### OR01 — Tạo/reuse giỏ và giữ items
 POST /api/orders · BUYER · Idempotency-Key
 
-Body gồm eventId và items. Buyer bấm Continue; frontend chưa được coi là đã hold. Service kiểm tra catalog/sales window/toàn bộ items rồi tạo hoặc reuse CART cho event. GA cùng ticketType trong cart được gộp vào một OrderItem và một Hold; nếu item đã có thì tăng quantity của item đó. Nếu một item không khả dụng, rollback toàn bộ. Hold đầu tiên đặt deadline now + 10 minutes; items thêm sau không đổi deadline. Endpoint hiện trả 201 khi tạo mới hoặc reuse CART.
+Body gồm eventId và items. Buyer bấm Continue; frontend chưa được coi là đã hold. Service kiểm tra catalog/sales window/toàn bộ items rồi tạo hoặc reuse CART cho event. GA cùng ticketType trong cart được gộp vào một OrderItem và một Hold; nếu item đã có thì tăng quantity của item đó. Nếu một item không khả dụng, rollback toàn bộ. Hold đầu tiên đặt deadline now + 10 minutes; items thêm sau không đổi deadline. Endpoint hiện trả 201 khi tạo mới hoặc reuse CART. Tổng vé (ghế + GA, tính cả vé đã có trong CART) không vượt giới hạn mỗi Order → `4012`; request tự nó đã vượt bị chặn trước khi gọi Product. Áp dụng tương tự cho OR04 và chiều tăng của OR05A.
 
 ### OR02 — Danh sách Order
 GET /api/orders · BUYER
 
-Chỉ trả Order của buyer; hiện trả active orders CART/PENDING_PAYMENT, sắp xếp `createdAt` giảm dần, chưa phân trang hoặc lọc status. Order đã quá deadline được expire ngay khi đọc (bổ sung cho job định kỳ) nên có thể biến khỏi danh sách giữa hai lần gọi.
+Query: `status` (lặp lại hoặc phân tách dấu phẩy, giá trị `OrderStatus`; mặc định `CART,PENDING_PAYMENT`; sai giá trị → `1001`), `page` (≥ 0, mặc định 0), `size` (1–100, mặc định 20). Trả `PageResponse` `{content, page, size, totalElements, totalPages}` (cùng shape PR07 của Product), chỉ Order của buyer, sắp xếp `createdAt` giảm dần. Order CART/PENDING_PAYMENT đã quá deadline được expire ngay khi đọc (bổ sung cho job định kỳ) trước khi truy vấn, nên có thể biến khỏi danh sách mặc định giữa hai lần gọi và xuất hiện ngay khi lọc `status=EXPIRED`.
+
+```json
+{ "code": 200, "result": { "content": [ { "id": "…", "status": "CART", "items": [] } ], "page": 0, "size": 20, "totalElements": 1, "totalPages": 1 } }
+```
 
 ### OR03 — Chi tiết Order
 GET /api/orders/{orderId} · BUYER

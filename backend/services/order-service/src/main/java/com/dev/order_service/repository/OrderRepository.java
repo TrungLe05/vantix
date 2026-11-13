@@ -3,6 +3,8 @@ package com.dev.order_service.repository;
 import com.dev.order_service.entity.Order;
 import com.dev.order_service.enums.OrderStatus;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import jakarta.persistence.QueryHint;
@@ -29,7 +31,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             @Param("status") OrderStatus status
     );
 
-    List<Order> findByBuyerIdAndStatusInOrderByCreatedAtDesc(UUID buyerId, List<OrderStatus> statuses);
+    Page<Order> findByBuyerIdAndStatusIn(UUID buyerId, List<OrderStatus> statuses, Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from Order o where o.id = :orderId and o.buyerId = :buyerId")

@@ -39,3 +39,5 @@ app:
     base-url: ${PRODUCT_SERVICE_URL:http://localhost:9003/api}
   order:
     hold-duration: PT10M
+    # Tổng vé (ghế + GA) tối đa mỗi Order, xem D24
+    max-tickets-per-order: ${ORDER_MAX_TICKETS_PER_ORDER:10}

@@ -180,7 +180,7 @@ class OrderConcurrencyIntegrationTest extends AbstractOrderIT {
         for (int i = 0; i < 3; i++) {
             tasks.add(orderCommandService::expireDueOrders);
             tasks.add(() -> orderService.getOrder(expiringBuyer, expiring.getId()));
-            tasks.add(() -> orderService.getOrders(expiringBuyer));
+            tasks.add(() -> orderService.getOrders(expiringBuyer, null, 0, 20));
             tasks.add(() -> orderService.getAvailability(eventId));
         }
         List<Outcome<Object>> outcomes = runConcurrently(tasks);

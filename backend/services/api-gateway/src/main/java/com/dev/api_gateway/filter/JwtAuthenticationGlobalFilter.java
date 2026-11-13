@@ -75,7 +75,8 @@ public class JwtAuthenticationGlobalFilter implements GlobalFilter, Ordered {
             // Tách riêng để frontend biết chỉ khi hết hạn mới nên gọi refresh
             return writeError(exchange, GatewayErrorCode.TOKEN_EXPIRED);
         } catch (JwtException | IllegalArgumentException e) {
-            log.debug("Access token bị từ chối: {}", e.getMessage());
+            // Chỉ log loại lỗi: message của JJWT có thể chứa header/claim đã decode của token
+            log.debug("Access token bị từ chối: {}", e.getClass().getSimpleName());
             return writeError(exchange, GatewayErrorCode.TOKEN_INVALID);
         }
 

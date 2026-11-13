@@ -1,7 +1,7 @@
 # Vantix — Phase 1: User & Auth — API Design
 
 > **Trạng thái:** Đã triển khai — nội dung khớp với code `user-service` và `api-gateway` khi hoàn thành P1 (14 API, đã manual test).
-> **Liên quan:** `P1_auth_design.md` (use case, ERD, sequence — **cần cập nhật theo mục 0**), `P0_infrastructure_summary.md`, `00_roadmap_phases_v1.md` (mục P1)
+> **Liên quan:** `P1_auth_design.md` (use case, ERD, sequence — đã cập nhật theo mục 0 ngày 13/11/2026), `P0_infrastructure_summary.md`, `00_roadmap_phases_v1.md` (mục P1)
 > **Phạm vi:** toàn bộ API của `user-service` trong P1 (auth + user + tạo STAFF) và phần xác thực JWT tại `api-gateway`. Mỗi API mô tả: request, response, lỗi (HTTP status + errorCode), các bước thực thi.
 
 ---
@@ -24,7 +24,7 @@ Trong quá trình code, thiết kế ban đầu (`P1_auth_design.md` và bản A
 | 10 | ✏️ | Không dùng `@Transactional` trên service; dùng `TransactionTemplate` bao riêng từng lệnh ghi (mục 1.6) | Tránh rollback nhầm khi vừa ghi vừa ném lỗi, và method `@Modifying @Query` tự viết không tự có transaction |
 | 11 | ➕ | Seed sẵn tài khoản ADMIN + STAFF khi khởi động (mục 7) | Không có API nào tạo ADMIN đầu tiên |
 
-**Cần cập nhật `P1_auth_design.md`:** ERD bỏ bảng `USER_OTP` và cột `REFRESH_TOKENS.expires_at`; sequence 4.1 và 4.6 (OTP ở Redis); 4.3 (refresh đọc từ cookie); 4.4 (`oauth2Login()` + bước exchange); 4.2/4.3 (response nhận token qua cookie).
+**Đã cập nhật `P1_auth_design.md` (13/11/2026):** ERD bỏ bảng `USER_OTP` và cột `REFRESH_TOKENS.expires_at`; sequence 4.1 và 4.6 (OTP ở Redis); 4.3 (refresh đọc từ cookie); 4.4 (`oauth2Login()` + bước exchange); 4.2/4.3 (response nhận token qua cookie).
 
 ---
 
@@ -137,7 +137,7 @@ Phân nhóm trong dải user-service:
 |---|---|---|
 | `otp:{purpose}:{userId}` | JSON `{otpCodeHash, attemptCount}` | 10 phút |
 | `otp:cooldown:{purpose}:{userId}` | `"1"` | 60 giây |
-| `oauth:code:{code}` | `userId` | 60 giây |
+| `oauth:code:{code}` | `"{userId}:{isNewUser}"` (cờ dùng cho onboarding Google lần đầu, xem A07) | 60 giây |
 
 `purpose` là `EMAIL_VERIFICATION` hoặc `FORGOT_PASSWORD`.
 
@@ -718,7 +718,7 @@ Thứ tự xử lý mỗi request:
 | 401 | 9003 | TOKEN_EXPIRED | Access token hết hạn | **Gọi A08 refresh rồi thử lại** |
 | 403 | 9004 | PASSWORD_CHANGE_REQUIRED | JWT có `mcp=true` mà gọi API ngoài allowlist | Chuyển tới màn hình đổi mật khẩu |
 
-Route công khai (khai dạng `METHOD /path`): `POST /api/auth/register`, `verify-email`, `resend-verification`, `login`, `oauth2/exchange`, `refresh`, `forgot-password`, `reset-password`; `GET /api/oauth2/authorization/**`; `GET /api/login/oauth2/code/**`; `GET /api/*/health` (health của các service Python).
+Route công khai (khai dạng `METHOD /path`): `POST /api/auth/register`, `verify-email`, `resend-verification`, `login`, `oauth2/exchange`, `refresh`, `forgot-password`, `reset-password`; `GET /api/oauth2/authorization/**`; `GET /api/login/oauth2/code/**`; `GET /api/*/health` (health của các service Python). Từ P2/P3 danh sách có thêm `GET /api/venues`, `GET /api/events`, `GET /api/events/*`, `GET /api/events/*/seat-map`, `GET /api/orders/events/*/availability` — nguồn sự thật là `app.gateway.public-endpoints` trong `api-gateway/src/main/resources/application.yaml`.
 
 Allowlist khi `mcp=true`: `PATCH /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/users/me`.
 
@@ -783,7 +783,7 @@ Mã `2302 OTP_EXPIRED` đã bị bỏ (gộp vào `2301`, xem mục 0 điểm 3)
 | `server.forward-headers-strategy: framework` | user-service | Để `redirect_uri` OAuth theo host của Gateway |
 | `app.gateway.public-endpoints`, `app.gateway.password-change-allowlist` | api-gateway | Danh sách `METHOD /path` |
 | `spring.cloud.gateway.server.webflux.globalcors` | api-gateway | Origin frontend, `allow-credentials: true` |
-| `app.run-config.default-admin.*`, `app.run-config.default-staff.*` | user-service | Tài khoản seed (mục 7) |
+| `app.run-config.default-admin.*`, `app.run-config.default-staff.*`, `app.run-config.default-buyer.password` | user-service | Tài khoản seed (mục 7) |
 
 Dependency: `user-service` dùng `commonlib-api-response`, `commonlib-kafka`, `commonlib-security`, `commonlib-jwt`; `api-gateway` dùng `commonlib-jwt` và `commonlib-api-response`, không dùng `commonlib-security`.
 
@@ -791,7 +791,7 @@ Dependency: `user-service` dùng `commonlib-api-response`, `commonlib-kafka`, `c
 
 ## 7. Dữ liệu seed (môi trường dev)
 
-`ApplicationRunConfig` (một `ApplicationRunner`) tạo sẵn 1 tài khoản `ADMIN` và 1 tài khoản `STAFF` khi khởi động nếu email chưa tồn tại, đọc từ `app.run-config.default-admin.*` / `default-staff.*`. Cả hai `status=ACTIVE`, `must_change_password=false`, email được chuẩn hóa (trim + lowercase); khởi động lại không tạo trùng. Đây là cách có tài khoản ADMIN đầu tiên để gọi A14.
+`ApplicationRunConfig` (một `ApplicationRunner`) tạo sẵn 1 tài khoản `ADMIN`, 1 tài khoản `STAFF` và 5 tài khoản `BUYER` (`buyer0`…`buyer4@gmail.com`, dùng chung mật khẩu `app.run-config.default-buyer.password` — phục vụ test P3/k6) khi khởi động nếu email chưa tồn tại, đọc từ `app.run-config.default-admin.*` / `default-staff.*` / `default-buyer.*`. Tất cả `status=ACTIVE`, `must_change_password=false`, email được chuẩn hóa (trim + lowercase); khởi động lại không tạo trùng. Đây là cách có tài khoản ADMIN đầu tiên để gọi A14.
 
 Chỉ dùng cho dev: không commit mật khẩu thật vào file cấu hình (lấy từ biến môi trường), và phải tắt/giới hạn theo profile khi deploy (P9).
 
@@ -811,4 +811,4 @@ Chỉ dùng cho dev: không commit mật khẩu thật vào file cấu hình (l�
 
 ---
 
-*Hết tài liệu API design P1 (đã cập nhật khớp code). Bước tiếp theo: cập nhật `P1_auth_design.md` theo mục 0, rồi sang P2 — Product.*
+*Hết tài liệu API design P1 (đã cập nhật khớp code). `P1_auth_design.md` đã được đồng bộ theo mục 0.*

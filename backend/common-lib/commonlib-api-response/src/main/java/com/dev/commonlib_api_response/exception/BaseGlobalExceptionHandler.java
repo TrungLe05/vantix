@@ -51,7 +51,9 @@ public abstract class BaseGlobalExceptionHandler {
     // 5. Vi phạm ràng buộc DB (unique, FK...) mà service không tự bắt trước — lưới an toàn
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
-        log.warn("Data integrity violation chưa được service xử lý cụ thể: {}", ex.getMessage());
+        // Không log message gốc: driver PostgreSQL đưa cả giá trị vi phạm (vd "Key (email)=(...)") vào message
+        log.warn("Data integrity violation chưa được service xử lý cụ thể: {}",
+                ex.getMostSpecificCause().getClass().getSimpleName());
         return buildResponse(CommonErrorCode.DATA_CONFLICT, null);
     }
 

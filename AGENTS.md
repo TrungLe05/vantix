@@ -12,31 +12,35 @@ Mọi agent (Codex, Antigravity, Claude...) đều tuân theo file này. Nếu f
 
 ## Cấu trúc repo
 ```
-common-lib/{commonlib-api-response, commonlib-security, commonlib-kafka}
-services/{api-gateway, user-service, product-service, order-service,
-          payment-service, notification-service, bot-detection-service, assistant-service}
-docs/   ← tài liệu thiết kế theo phase (nguồn sự thật)
+backend/
+  common-lib/{commonlib-api-response, commonlib-security, commonlib-kafka, commonlib-jwt}
+  services/{api-gateway, user-service, product-service, order-service,
+            payment-service, notification-service, bot-detection-service, assistant-service}
+frontend/  ← Next.js, có AGENTS.md riêng
+docs/      ← tài liệu thiết kế theo phase (nguồn sự thật)
 ```
 | Service | Port | Database |
 |---|---|---|
 | api-gateway | 8999 | — |
-| notification | 9000 | notification_service |
+| notification | 9000 | notifications_service |
 | order | 9001 | orders_service |
-| payment | 9002 | payment_service |
-| product | 9003 | product_service |
-| user | 9004 | user_service |
+| payment | 9002 | payments_service |
+| product | 9003 | products_service |
+| user | 9004 | users_service |
 | bot-detection (Python) | 9005 | — |
 | assistant (Python) | 9006 | — |
+
+Tên DB lấy theo `application.yaml` của từng service. Compose không tự tạo DB → tạo trước khi chạy service, nếu không Flyway lỗi.
 
 Mọi service Java có `server.servlet.context-path: /api` → `@RequestMapping` KHÔNG thêm tiền tố `/api` (vd `/auth/login`, không phải `/api/auth/login`).
 
 ## Lệnh
-- Hạ tầng dev: `docker compose up -d`
-- Build + test toàn bộ: `mvn --batch-mode clean verify`
-- Chạy 1 module: `mvn -pl services/user-service -am spring-boot:run`
+- Hạ tầng dev: `docker compose up -d` (biến môi trường mẫu: `.env.example`, `frontend/.env.example`)
+- Build + test toàn bộ (trong `backend/`): `mvn --batch-mode clean verify`
+- Chạy 1 module (trong `backend/`): `mvn -pl services/user-service -am spring-boot:run`
 
 ## Convention backend (BẮT BUỘC)
-- Package theo layer: `controller`, `service`, `repository`, `dto`, `entity`, `exception`, `config`. Code mới theo đúng cấu trúc này.
+- Package theo layer, theo đúng tên package của service đang sửa: user/product dùng `controller`, `services` (interface + `*Impl`), `repository`, `entities`, `dto/request|response`, `exception`, `config`, `security`; order dùng `service`, `entity`, `enums`, `client`, `event`.
 - Mapping Entity <-> DTO viết tay trong service/mapper thuần. KHÔNG dùng MapStruct hay thư viện mapper khác.
 - DTO: ưu tiên class + Lombok; record chỉ khi phù hợp và nhất quán với code xung quanh.
 - JPA entity: KHÔNG dùng `@Data`. Cân nhắc kỹ `@EqualsAndHashCode`/`@ToString` (tránh lazy loading, vòng lặp).
@@ -73,11 +77,13 @@ Mọi service Java có `server.servlet.context-path: /api` → `@RequestMapping`
 - Comment bằng tiếng Việt, giải thích "tại sao", không lặp lại "code làm gì".
 
 ## Phase hiện tại
-- P0 (hạ tầng) xong: `docs/P0_infrastructure_summary.md`.
-- P1 (User & Auth) đang làm: `docs/P1_auth_design.md`. Roadmap: `docs/00_roadmap_phases_v1.md`.
-- Việc treo: OTP xác thực thiết bị mới (quyết sau P6); path route Gateway rà lại khi có API thật.
+- P0 hạ tầng, P1 User & Auth (`docs/auth/`), P2 Product (`docs/product/`): xong phần API, còn thiếu test.
+- P3 Order (`docs/order/`): đã code, còn chạy E2E + k6 và test concurrency.
+- P4–P9 chưa bắt đầu. Roadmap: `docs/00_roadmap_phases_v1.md`; tiến độ chi tiết: `PROGRESS.md`; backlog: `TASKS.md`.
+- Việc treo: OTP xác thực thiết bị mới (quyết sau P6).
 
 ## Code mẫu chuẩn (golden example)
-Chưa có. Sau khi xong luồng đầu tiên của P1 (đề xuất: `POST /auth/register`), ghi đường dẫn vào đây:
-`TODO: services/user-service/.../controller/AuthController.java` và các file service/repository/dto/test/migration đi kèm.
-Từ đó mọi endpoint mới phải theo đúng mẫu này.
+- Endpoint CRUD có phân quyền ADMIN, `@Transactional`, mapping tay, errorCode riêng: product-service — `controller/EventController.java`, `services/EventServiceImpl.java`, `exception/ProductErrorCode.java`, `db/migration/V1__create_product_tables.sql`.
+- Luồng bảo mật dùng `TransactionTemplate`, Kafka sau commit: user-service — `controller/AuthController.java`, `services/AuthServiceImpl.java`.
+- Luồng giao dịch đồng thời (idempotency, Redis + ràng buộc DB, outbox): order-service — `service/OrderServiceImpl.java`, `service/OrderCommandService.java`, `event/OrderOutboxScheduler.java`.
+- Chưa có mẫu test chuẩn (mới có `OrderRequestHasherTest`).

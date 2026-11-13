@@ -79,7 +79,7 @@ Nguyên tắc dùng để tách service: **ai sở hữu dữ liệu này**, **t
 
 | Service | Ngôn ngữ | Lý do |
 |---|---|---|
-| api-gateway, user, product, order, payment, notification | **Java 21 + Spring Boot 3.x** | Hệ sinh thái Spring (Spring Data/JPA/Hibernate, Spring Security, Kafka client chính thức) giúp tập trung vào logic nghiệp vụ |
+| api-gateway, user, product, order, payment, notification | **Java 21 + Spring Boot 4.1.x** (Spring Cloud 2025.1.2 — bản thực tế trong `backend/pom.xml`; v1 của tài liệu ghi 3.x) | Hệ sinh thái Spring (Spring Data/JPA/Hibernate, Spring Security, Kafka client chính thức) giúp tập trung vào logic nghiệp vụ |
 | bot-detection | **Python + FastAPI** (scikit-learn cho Isolation Forest) | Hệ sinh thái ML mạnh nhất hiện tại; ràng buộc từ chính bài toán, không phải lựa chọn tùy ý |
 | assistant | Ngôn ngữ linh hoạt (Python hoặc Java đều được) | Chủ yếu là gọi LLM API + gọi API nội bộ lấy ngữ cảnh, không có ràng buộc công nghệ đặc biệt |
 

@@ -50,8 +50,6 @@ public class JwtUtils {
 
         log.info("expiration-ms access token: {}", expirationMs);
         log.info("expiration-refresh-ms access token: {}", expirationRefreshMs);
-        // TẠM THỜI để so sánh secret giữa các service, xóa sau khi xong
-        log.info("JWT secret fingerprint: {}, length: {}", Integer.toHexString(secret.hashCode()), secret.length());
     }
 
 

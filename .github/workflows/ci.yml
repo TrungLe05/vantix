@@ -33,7 +33,7 @@ jobs:
       frontend: ${{ steps.result.outputs.frontend }}
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Lọc theo đường dẫn
         id: filter
@@ -73,7 +73,7 @@ jobs:
       pull-requests: read
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 # cần toàn bộ lịch sử để lint các commit trong PR
 
@@ -102,7 +102,7 @@ jobs:
         working-directory: backend
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java 21
         uses: actions/setup-java@v6
@@ -140,7 +140,7 @@ jobs:
         working-directory: frontend
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -176,7 +176,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -197,7 +197,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Dependency review
         uses: actions/dependency-review-action@v4

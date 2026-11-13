@@ -17,7 +17,10 @@ public class OrderEventListener {
     private final JsonMapper jsonMapper;
     private final OrderCommandService orderCommandService;
 
-    @KafkaListener(topics = KafkaTopics.PRODUCT_EVENT_CANCELLED, groupId = "order-service")
+    // groupId cấu hình được để một stack test/E2E dùng chung cluster Kafka dev không tranh partition
+    // với order-service dev (cùng group thì mỗi message chỉ một bên nhận)
+    @KafkaListener(topics = KafkaTopics.PRODUCT_EVENT_CANCELLED,
+            groupId = "${app.order.kafka-consumer-group:order-service}")
     public void onEventCancelled(String payload) {
         try {
             EventCancelledEvent event = jsonMapper.readValue(payload, EventCancelledEvent.class);

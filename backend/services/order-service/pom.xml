@@ -61,6 +61,12 @@
 			<groupId>org.springframework.kafka</groupId>
 			<artifactId>spring-kafka</artifactId>
 		</dependency>
+		<!-- Boot 4 tách auto-configuration Kafka ra module riêng: thiếu starter này thì không có @EnableKafka,
+		     @KafkaListener bị bỏ qua và spring.kafka.consumer.* trong application.yaml không có tác dụng -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-kafka</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>

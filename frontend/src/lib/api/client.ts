@@ -22,15 +22,22 @@ apiClient.interceptors.request.use((config) => {
 
 let refreshPromise: Promise<string> | null = null;
 
-async function refreshAccessToken(): Promise<string> {
+function withRefreshLock<T>(refresh: () => Promise<T>): Promise<T> {
+  if (typeof navigator === "undefined" || !navigator.locks) {
+    return refresh();
+  }
+
+  return navigator.locks.request("vantix:refresh-token", { mode: "exclusive" }, refresh);
+}
+
+export function refreshAccessToken(): Promise<string> {
   if (!refreshPromise) {
-    refreshPromise = apiClient
-      .post("/auth/refresh")
-      .then((res) => {
-        const { auth, user } = res.data.result;
-        useAuthStore.getState().setSession(auth.accessToken, user);
-        return auth.accessToken as string;
-      })
+    refreshPromise = withRefreshLock(async () => {
+      const res = await apiClient.post("/auth/refresh");
+      const { auth, user } = res.data.result;
+      useAuthStore.getState().setSession(auth.accessToken, user);
+      return auth.accessToken as string;
+    })
       .finally(() => {
         refreshPromise = null;
       });
@@ -47,10 +54,7 @@ apiClient.interceptors.response.use(
     if (errorCode === 1004 && typeof window !== "undefined") {
       window.dispatchEvent(new Event(ACCESS_DENIED_EVENT));
     }
-    if (
-      typeof window !== "undefined" &&
-      (errorCode === 1000 || (error.response?.status ?? 0) >= 500)
-    ) {
+    if (typeof window !== "undefined" && errorCode === 1000) {
       window.dispatchEvent(new Event(SERVER_ERROR_EVENT));
     }
 

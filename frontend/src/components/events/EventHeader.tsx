@@ -1,13 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, LayoutDashboard, ShoppingBag, UserRound, X } from "lucide-react";
+import { Bell, Clock3, LayoutDashboard, ShoppingBag, UserRound, X } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
+import { useQuery } from "@tanstack/react-query";
+import { getOrders } from "@/lib/api/orders";
 
 export function EventHeader({ showSignUp = false }: { showSignUp?: boolean }) {
   const user = useAuthStore((state) => state.user);
   const [drawer, setDrawer] = useState<"cart" | "notifications" | null>(null);
+  const [now, setNow] = useState(0);
+  const cartQuery = useQuery({
+    queryKey: ["orders"],
+    queryFn: getOrders,
+    enabled: drawer === "cart",
+    refetchInterval: drawer === "cart" ? 15_000 : false,
+  });
+
+  useEffect(() => {
+    if (drawer !== "cart") return;
+    const tick = () => setNow(Date.now());
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [drawer]);
 
   return (
     <header className="sticky top-0 z-40 h-16 border-b border-border bg-background">
@@ -30,7 +47,7 @@ export function EventHeader({ showSignUp = false }: { showSignUp?: boolean }) {
             <Link
               href="/"
               aria-current="page"
-              className="border-b-2 border-primary py-[21px] text-sm font-semibold text-primary"
+              className="border-b-2 border-primary py-5.25 text-sm font-semibold text-primary"
             >
               Discover
             </Link>
@@ -52,11 +69,24 @@ export function EventHeader({ showSignUp = false }: { showSignUp?: boolean }) {
             ) : null}
             {user.role === "BUYER" ? (
               <>
-                <button type="button" onClick={() => setDrawer("cart")} aria-label="Open shopping cart" title="Shopping cart" className="relative inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <button
+                  type="button"
+                  onClick={() => setDrawer("cart")}
+                  aria-label="Open shopping cart"
+                  title="Shopping cart"
+                  className="relative inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
                   <ShoppingBag aria-hidden="true" className="size-5" />
-                  <span className="absolute right-1 top-1 size-2 rounded-full bg-primary" />
                 </button>
-                <button type="button" onClick={() => setDrawer("notifications")} aria-label="Open notifications" title="Notifications" className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Bell aria-hidden="true" className="size-5" /></button>
+                <button
+                  type="button"
+                  onClick={() => setDrawer("notifications")}
+                  aria-label="Open notifications"
+                  title="Notifications"
+                  className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Bell aria-hidden="true" className="size-5" />
+                </button>
               </>
             ) : null}
             <Link
@@ -74,7 +104,7 @@ export function EventHeader({ showSignUp = false }: { showSignUp?: boolean }) {
               href="/login"
               className="inline-flex min-h-10 items-center rounded-lg border border-border bg-background px-4 text-sm font-medium transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Log in
+              Sign in
             </Link>
             {showSignUp ? (
               <Link
@@ -88,25 +118,148 @@ export function EventHeader({ showSignUp = false }: { showSignUp?: boolean }) {
         )}
       </div>
       {drawer ? (
-        <div className="fixed inset-0 z-50 flex justify-end" role="presentation">
-          <button type="button" aria-label="Close panel" onClick={() => setDrawer(null)} className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" />
-          <aside role="dialog" aria-modal="true" aria-labelledby="buyer-drawer-title" className="relative flex h-full w-full max-w-md animate-in slide-in-from-right flex-col border-l border-border bg-background shadow-2xl duration-300">
-            <div className="flex items-center justify-between border-b border-border px-6 py-5"><div><h2 id="buyer-drawer-title" className="font-heading text-lg font-semibold">{drawer === "cart" ? "Your cart" : "Notifications"}</h2><p className="mt-1 text-xs text-muted-foreground">Preview data · checkout is not available yet</p></div><button type="button" onClick={() => setDrawer(null)} aria-label="Close" className="rounded-lg p-2 text-muted-foreground hover:bg-muted"><X className="size-5" aria-hidden="true" /></button></div>
+        <div
+          className="fixed inset-0 z-50 flex justify-end"
+          role="presentation"
+        >
+          <button
+            type="button"
+            aria-label="Close panel"
+            onClick={() => setDrawer(null)}
+            className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
+          />
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="buyer-drawer-title"
+            className="relative flex h-full w-full max-w-md animate-in slide-in-from-right flex-col border-l border-border bg-background shadow-2xl duration-300"
+          >
+            <div className="flex items-center justify-between border-b border-border px-6 py-5">
+              <div>
+                <h2
+                  id="buyer-drawer-title"
+                  className="font-heading text-lg font-semibold"
+                >
+                  {drawer === "cart" ? "Your cart" : "Notifications"}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDrawer(null)}
+                aria-label="Close"
+                className="rounded-lg p-2 text-muted-foreground hover:bg-muted"
+              >
+                <X className="size-5" aria-hidden="true" />
+              </button>
+            </div>
             {drawer === "cart" ? (
               <div className="flex flex-1 flex-col p-6">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sample cart item</p>
-                <article className="mt-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-                  <h3 className="font-semibold">Design After Dark</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">General admission · Wed, Nov 19</p>
-                  <div className="mt-4 flex items-center justify-between text-sm"><span>2 tickets</span><span className="font-semibold">$48.00</span></div>
-                </article>
-                <button type="button" disabled className="mt-auto min-h-12 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground opacity-60">Checkout coming soon</button>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Your event carts
+                </p>
+                {cartQuery.isPending ? (
+                  <div
+                    role="status"
+                    aria-label="Loading carts"
+                    className="mt-4 space-y-3"
+                  >
+                    <div className="h-24 animate-pulse rounded-xl bg-muted" />
+                    <div className="h-24 animate-pulse rounded-xl bg-muted" />
+                  </div>
+                ) : null}
+                {cartQuery.isError ? (
+                  <p
+                    role="alert"
+                    className="mt-4 rounded-xl border border-destructive/30 p-4 text-sm text-muted-foreground"
+                  >
+                    Could not load your carts. Close this panel and try again.
+                  </p>
+                ) : null}
+                {cartQuery.data?.length === 0 ? (
+                  <div className="mt-4 rounded-xl border border-dashed border-border p-5 text-center">
+                    <ShoppingBag
+                      aria-hidden="true"
+                      className="mx-auto size-6 text-muted-foreground"
+                    />
+                    <p className="mt-3 text-sm font-semibold">
+                      Your cart is empty
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Choose tickets from an event to reserve them for 10
+                      minutes.
+                    </p>
+                  </div>
+                ) : null}
+                <div className="mt-4 space-y-3 overflow-y-auto">
+                  {cartQuery.data?.map((order) => {
+                    const remaining = Math.max(
+                      0,
+                      new Date(order.holdExpiresAt).getTime() - now,
+                    );
+                    const minutes = Math.floor(remaining / 60_000);
+                    const seconds = Math.floor((remaining % 60_000) / 1000);
+                    const isUrgent = remaining > 0 && remaining <= 60_000;
+                    return (
+                      <Link
+                        key={order.id}
+                        href={`/orders/${order.id}`}
+                        onClick={() => setDrawer(null)}
+                        className="block rounded-xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/40 hover:bg-muted/40"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="font-semibold">Event cart</h3>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {order.items.reduce(
+                                (sum, item) => sum + item.quantity,
+                                0,
+                              )}{" "}
+                              tickets ·{" "}
+                              {order.status === "CART"
+                                ? "Cart"
+                                : "Payment pending"}
+                            </p>
+                            <p
+                              role="timer"
+                              aria-label={
+                                remaining > 0
+                                  ? `Hold expires in ${minutes} minutes and ${seconds} seconds`
+                                  : "Ticket hold expired"
+                              }
+                              className={`mt-2 inline-flex items-center gap-1.5 text-xs font-semibold ${isUrgent ? "text-destructive" : "text-muted-foreground"}`}
+                            >
+                              <Clock3 aria-hidden="true" className="size-3.5" />
+                              {remaining > 0
+                                ? `Hold expires in ${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+                                : "Hold expired"}
+                            </p>
+                          </div>
+                          <span className="text-sm font-semibold">
+                            {new Intl.NumberFormat("en-US", {
+                              style: "currency",
+                              currency: order.currency,
+                            }).format(order.totalAmount)}
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+                <Link
+                  href="/orders"
+                  onClick={() => setDrawer(null)}
+                  className="mt-auto inline-flex min-h-12 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground"
+                >
+                  View all carts
+                </Link>
               </div>
             ) : (
-              <div className="flex-1 space-y-3 overflow-y-auto p-6">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sample notifications</p>
-                <article className="rounded-xl border border-border bg-card p-4"><p className="font-semibold">Sales are open</p><p className="mt-1 text-sm leading-5 text-muted-foreground">Tickets for Design After Dark are now available.</p><time className="mt-3 block text-xs text-muted-foreground">Today · 9:00 AM</time></article>
-                <article className="rounded-xl border border-border bg-card p-4"><p className="font-semibold">New event near you</p><p className="mt-1 text-sm leading-5 text-muted-foreground">A new live music event was added in your city.</p><time className="mt-3 block text-xs text-muted-foreground">Yesterday</time></article>
+              <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
+                <Bell aria-hidden="true" className="size-7 text-muted-foreground" />
+                <p className="mt-3 text-sm font-semibold">No notifications</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  You’re all caught up.
+                </p>
               </div>
             )}
           </aside>

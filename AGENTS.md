@@ -21,7 +21,7 @@ docs/   ← tài liệu thiết kế theo phase (nguồn sự thật)
 |---|---|---|
 | api-gateway | 8999 | — |
 | notification | 9000 | notification_service |
-| order | 9001 | order_service |
+| order | 9001 | orders_service |
 | payment | 9002 | payment_service |
 | product | 9003 | product_service |
 | user | 9004 | user_service |
@@ -45,7 +45,7 @@ Mọi service Java có `server.servlet.context-path: /api` → `@RequestMapping`
 - Flyway: file `V{version}__{description}.sql` trong `db/migration`. KHÔNG sửa migration đã áp dụng; mọi thay đổi schema qua migration mới. `spring.jpa.hibernate.ddl-auto: validate`.
 - Auth: Gateway verify JWT và inject `X-User-Id`/`X-User-Role` (strip header này từ client trước). Service downstream dùng `GatewayHeaderAuthFilter` (`commonlib-security`), KHÔNG tự verify JWT.
 - Giao tiếp: sync (REST/OpenFeign) chỉ khi cần phản hồi ngắn ngay; async (Kafka) khi chờ hệ thống ngoài hoặc không cần chờ. Consumer Kafka phải idempotent.
-- Common-lib: chỉ đưa code vào khi >= 3 service cùng cần. Dependency chỉ lên `dependencyManagement` của root khi >= 2 module dùng.
+- Common-lib: chỉ đưa code vào khi >= 3 service cùng cần. Dependency dùng >= 2 module phải lên `dependencyManagement` của root; dependency riêng một module có thể để version tại module, trừ khi yêu cầu dự án chỉ định quản lý tập trung ở parent.
 - `spring-boot-maven-plugin` chỉ nằm trong `pluginManagement` ở root, KHÔNG áp lên module `commonlib-*`.
 - Tận dụng Java 21 (record, switch expression, pattern matching) khi tự nhiên, không dùng để khoe.
 

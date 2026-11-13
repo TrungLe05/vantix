@@ -54,26 +54,33 @@ public class TicketTypeServiceImpl implements TicketTypeService {
     }
 
     private TicketType createSeatedTicketType(Event event, CreateTicketTypeRequest request) {
+        // totalQuantity của SEATED do server dẫn xuất từ số ghế — client gửi lên là sai hợp đồng (1001)
+        if (request.getTotalQuantity() != null) {
+            throw new AppException(CommonErrorCode.VALIDATION_FAILED);
+        }
         if (request.getSeatIds() == null || request.getSeatIds().isEmpty()) {
             throw new AppException(ProductErrorCode.SEAT_IDS_REQUIRED_FOR_SEATED);
         }
+        // Bỏ id lặp để so số lượng chính xác (id lặp không phải ghế thiếu) và totalQuantity đúng
+        List<UUID> seatIds = request.getSeatIds().stream().distinct().toList();
 
         var seatMap = seatMapRepository.findByEventId(event.getId())
                 .orElseThrow(() -> new AppException(ProductErrorCode.SEAT_MAP_NOT_FOUND));
 
         // 1 query lấy mọi seatId thuộc ĐÚNG seat map này — phần tử nào trong request không nằm trong
         // kết quả trả về nghĩa là: hoặc không tồn tại, hoặc thuộc event/seat map khác
-        List<Seat> seats = seatRepository.findAllBySeatMapIdAndIdIn(seatMap.getId(), request.getSeatIds());
+        List<Seat> seats = seatRepository.findAllBySeatMapIdAndIdIn(seatMap.getId(), seatIds);
 
-        if (seats.size() != request.getSeatIds().size()) {
+        if (seats.size() != seatIds.size()) {
             // Phân biệt 2 nguyên nhân: id hoàn toàn không tồn tại trong DB, hay tồn tại nhưng khác event
-            boolean anyMissingEntirely = seats.size() < request.getSeatIds().size()
-                    && seatRepository.findAllById(request.getSeatIds()).size() != request.getSeatIds().size();
+            boolean anyMissingEntirely = seats.size() < seatIds.size()
+                    && seatRepository.findAllById(seatIds).size() != seatIds.size();
             throw new AppException(anyMissingEntirely
                     ? ProductErrorCode.SEAT_NOT_FOUND
                     : ProductErrorCode.SEAT_BELONGS_TO_DIFFERENT_EVENT);
         }
 
+        // Chặn sớm để báo lỗi rõ; lớp quyết định là UPDATE có điều kiện bên dưới
         boolean alreadyAssigned = seats.stream().anyMatch(s -> s.getTicketTypeId() != null);
         if (alreadyAssigned) {
             throw new AppException(ProductErrorCode.SEAT_ALREADY_ASSIGNED);
@@ -88,15 +95,19 @@ public class TicketTypeServiceImpl implements TicketTypeService {
                 .build();
         ticketType = ticketTypeRepository.save(ticketType);
 
-        for (Seat seat : seats) {
-            seat.setTicketTypeId(ticketType.getId());
+        int assigned = seatRepository.assignTicketTypeIfUnassigned(ticketType.getId(), seatMap.getId(), seatIds);
+        if (assigned != seatIds.size()) {
+            // Request khác vừa gán một phần số ghế này: ném lỗi để rollback cả ticket type vừa insert
+            throw new AppException(ProductErrorCode.SEAT_ALREADY_ASSIGNED);
         }
-        seatRepository.saveAll(seats);
 
         return ticketType;
     }
 
     private TicketType createGaTicketType(Event event, CreateTicketTypeRequest request) {
+        if (request.getSeatIds() != null) {
+            throw new AppException(CommonErrorCode.VALIDATION_FAILED);
+        }
         if (request.getTotalQuantity() == null || request.getTotalQuantity() <= 0) {
             throw new AppException(ProductErrorCode.GA_QUANTITY_REQUIRED);
         }

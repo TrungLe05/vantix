@@ -9,7 +9,7 @@ Trạng thái: `TODO` · `IN_PROGRESS` · `IN_REVIEW` · `BLOCKED` · `DONE`. M�
 | # | Hạng mục | Ưu tiên | Trạng thái | PR | Ghi chú |
 |---|---|---|---|---|---|
 | A1 | Init script tạo 5 DB trong Compose | 🔴 | DONE | #27 | `docker/postgres/init/01-create-databases.sql`, idempotent, chỉ tự chạy khi volume trống |
-| A2 | Service kết nối đúng DB (Flyway chạy) | 🔴 | IN_PROGRESS | — | user-service: Flyway chạy trên `users_service_test` (fix/user-otp-atomic); còn product/order |
+| A2 | Service kết nối đúng DB (Flyway chạy) | 🔴 | IN_PROGRESS | — | user-service (#29), product-service (fix/product-publish-seat-constraints): Flyway chạy trên DB test; còn order |
 | D1 | Gỡ log fingerprint JWT secret (`JwtUtils`) | 🔴 | DONE | trước đợt này | Chỉ còn log TTL |
 | D2 | Log `DataIntegrityViolation`, token bị từ chối, lỗi OAuth2 chỉ còn loại/mã lỗi | 🔴 | DONE | trước đợt này | Đã rà `BaseGlobalExceptionHandler`, `JwtAuthenticationGlobalFilter`, `OAuth2LoginFailureHandler` |
 | D3 | Đánh giá rotate `JWT_SECRET_KEY` (fingerprint từng bị log) | 🟠 | BLOCKED | — | Cần chủ repo xác nhận log dev cũ có từng chia sẻ/công khai không; không đọc `.env` |
@@ -17,10 +17,10 @@ Trạng thái: `TODO` · `IN_PROGRESS` · `IN_REVIEW` · `BLOCKED` · `DONE`. M�
 | F1 | Gateway log `DEBUG` → `INFO` mặc định, `DEBUG` theo profile `dev` | ⚪ | DONE | #28 | `SPRING_PROFILES_ACTIVE=dev` để bật DEBUG |
 | C5 | Test mcp allowlist ở Gateway | 🟠 | DONE | #28 | `GatewayAuthAndCorsIntegrationTest`: chặn ngoài allowlist (9004), cho phép đúng method+path |
 | C6 | Test preflight `OPTIONS` qua Gateway | ⚪ | DONE | #28 | Preflight route bảo vệ trả 200 + CORS header không cần token; origin lạ 403 |
-| C1 | Test refresh rotation + reuse detection | 🟠 | IN_REVIEW | fix/user-otp-atomic | `RefreshTokenRotationIntegrationTest` (Postgres thật): rotation, reuse thu hồi family, family khác không ảnh hưởng, 10 refresh song song → 1 thắng |
-| C3 | Test OTP attempts/cooldown | 🟠 | IN_REVIEW | fix/user-otp-atomic | `OtpServiceIntegrationTest` (Redis thật) |
-| G1 | OTP nguyên tử (`INCR`/Lua) + test concurrency | 🟠 | IN_REVIEW | fix/user-otp-atomic | Lua script cho verify, `SET NX` cho cooldown (D22). Code cũ fail 2 test song song |
-| B1 | Test product: publish gom lý do, PR10 all-or-nothing, PR12 seat, ẩn DRAFT | 🟠 | TODO | — | |
+| C1 | Test refresh rotation + reuse detection | 🟠 | DONE | #29 | `RefreshTokenRotationIntegrationTest` (Postgres thật): rotation, reuse thu hồi family, family khác không ảnh hưởng, 10 refresh song song → 1 thắng |
+| C3 | Test OTP attempts/cooldown | 🟠 | DONE | #29 | `OtpServiceIntegrationTest` (Redis thật) |
+| G1 | OTP nguyên tử (`INCR`/Lua) + test concurrency | 🟠 | DONE | #29 | Lua script cho verify, `SET NX` cho cooldown (D22). Code cũ fail 2 test song song |
+| B1 | Test product: publish gom lý do, PR10 all-or-nothing, PR12 seat, ẩn DRAFT | 🟠 | IN_REVIEW | fix/product-publish-seat-constraints | `ProductCatalogIntegrationTest` 12 case; sửa 3 lỗi test phát hiện: PR10 trả 1005 thay 3203, PR12 race gán ghế (7/8 request cùng thắng), PR12 không chặn field sai category |
 | P3-D1 | Unit test `CatalogValidationService`, `OrderCommandService` | 🟠 | TODO | — | |
 | P3-D2 | Giới hạn số vé tối đa mỗi request/Order (cấu hình được) | 🟠 | TODO | — | |
 | P3-D3 | Phân trang + lọc status `GET /orders` | 🟠 | TODO | — | Không phá contract frontend hiện tại |

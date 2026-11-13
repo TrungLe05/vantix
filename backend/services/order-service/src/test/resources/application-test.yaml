@@ -18,4 +18,6 @@ spring:
       auto-startup: false
 app:
   order:
+    # Test gọi publishPendingEvents trực tiếp; không để lần chạy nền đua với test
+    outbox-initial-delay-ms: 3600000
     outbox-poll-interval-ms: 3600000

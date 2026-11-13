@@ -160,7 +160,7 @@ Order phát khi buyer thêm items ở OR01/OR04. Topic `cart.item_added` (`Kafka
 { "orderId": "uuid", "buyerId": "uuid", "eventId": "uuid", "itemCount": 2, "quantity": 3, "occurredAt": "2026-10-25T12:00:00Z" }
 ~~~
 
-Ghi vào bảng `order_event_outbox` trong cùng transaction tạo hold; `OrderOutboxScheduler` poll mỗi 1 giây (`app.order.outbox-poll-interval-ms`), lỗi gửi thì retry sau 5 giây, **chưa có DLQ/alerting**. Không có tên/email/IP thô; `buyerId` là UUID nội bộ. Account/device features chỉ thêm khi pseudonymization, consent, retention khớp P8 (P6 sẽ chốt lại schema đầy đủ).
+Ghi vào bảng `order_event_outbox` trong cùng transaction tạo hold; `OrderOutboxScheduler` poll mỗi 1 giây (`app.order.outbox-poll-interval-ms`), lỗi gửi thì retry với backoff lũy thừa `5s × 2^attempt` (trần 5 phút, `app.order.outbox-base-backoff-ms`/`outbox-max-backoff-ms`), sau 10 lần (`app.order.outbox-max-attempts`) đánh dấu `dead_at` + log `ERROR OUTBOX_DEAD_LETTER` và dừng retry; gauge `outbox.pending`/`outbox.dead` (D25). Requeue tay: `UPDATE order_event_outbox SET dead_at = NULL, attempt_count = 0, next_attempt_at = now() WHERE dead_at IS NOT NULL;` Không có tên/email/IP thô; `buyerId` là UUID nội bộ. Account/device features chỉ thêm khi pseudonymization, consent, retention khớp P8 (P6 sẽ chốt lại schema đầy đủ).
 
 ### product.event-cancelled
 Consumer Order idempotent (`OrderEventListener`, group `order-service`). Event lặp không nhả tồn nhiều lần; event id được ghi vào bảng `cancelled_events` để chặn hold/confirm mới. Hủy/nhả Order chưa thanh toán; Order đã thanh toán theo refund P4. Payload lỗi được ném lại để Kafka retry.

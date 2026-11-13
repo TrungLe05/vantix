@@ -671,6 +671,11 @@ Validation từng phần tử: mục 3. `displayLabel` **không** nhận từ cl
 
 Order cung cấp API availability trong P3; không tạo topic đồng bộ trạng thái ghế về Product.
 
+**Độ tin cậy outbox (D25).** Lỗi gửi: retry sau `5s × 2^attempt` (trần 5 phút); sau 10 lần → `dead_at` + log `ERROR OUTBOX_DEAD_LETTER …`, không retry nữa. Lô dừng ở lỗi đầu tiên. Gauge Micrometer `outbox.pending`/`outbox.dead` (tag `outbox`). Cấu hình: `app.outbox.base-backoff-ms`, `max-backoff-ms`, `max-attempts`. Xử lý tay bản ghi dead-letter sau khi sửa nguyên nhân:
+```sql
+UPDATE event_outbox SET dead_at = NULL, attempt_count = 0, next_attempt_at = now() WHERE dead_at IS NOT NULL;
+```
+
 ---
 
 ## 9. Điểm cần xác nhận trước khi code

@@ -63,8 +63,21 @@ class ProductCatalogIntegrationTest {
     private MockMvc mvc;
     private UUID venueId;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    private static boolean cleaned;
+
     @BeforeEach
     void setUp() throws Exception {
+        if (!cleaned) {
+            // Danh sách admin/public phân trang theo startAt: dữ liệu tích lũy qua nhiều lần chạy local đẩy event
+            // mới ra ngoài trang. Dọn một lần mỗi lần chạy — chỉ trên DB test, không bao giờ trên DB dev.
+            assertThat(jdbc.queryForObject("SELECT current_database()", String.class))
+                    .isEqualTo("products_service_test");
+            jdbc.execute("TRUNCATE event_outbox, seats, ticket_types, seat_maps, events, venues CASCADE");
+            cleaned = true;
+        }
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(springSecurityFilterChain).build();
         venueId = id(admin(post("/venues"),
                 "{\"name\":\"IT Venue\",\"address\":\"1 Test St\",\"city\":\"HCM\"}").andExpect(status().isCreated()));

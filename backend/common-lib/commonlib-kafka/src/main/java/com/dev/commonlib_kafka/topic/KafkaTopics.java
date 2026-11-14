@@ -20,6 +20,10 @@ public final class KafkaTopics {
     // order-service → payment-service (P4)
     public static final String ORDER_REFUND_REQUESTED = "order.refund-requested";
 
+    // order-service → notification-service (P5)
+    public static final String ORDER_TICKETS_ISSUED = "order.tickets-issued";
+    public static final String ORDER_REFUNDED = "order.refunded";
+
     // payment-service → order-service (P4)
     public static final String PAYMENT_SUCCEEDED = "payment.succeeded";
     public static final String PAYMENT_FAILED = "payment.failed";

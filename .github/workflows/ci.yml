@@ -84,7 +84,7 @@ jobs:
 
       # Khi dùng "Squash and merge", tiêu đề PR trở thành commit message trên main
       - name: Lint tiêu đề PR
-        uses: amannn/action-semantic-pull-request@v5
+        uses: amannn/action-semantic-pull-request@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

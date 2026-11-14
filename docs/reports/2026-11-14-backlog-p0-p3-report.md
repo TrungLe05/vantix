@@ -92,3 +92,17 @@ Integration test dùng DB riêng `*_test` (role `vantix_test`, script `docker/po
 - Tạo thêm trên Postgres compose: role `vantix_test`, DB `*_test` và `*_e2e` (chỉ phục vụ test).
 - Stack E2E (cổng 18999/19001/19003/19004/3001) đã dừng sau khi test. Các service dev của bạn ở 3000/8999/900x **không còn chạy** tại thời điểm kết thúc; agent không dừng các PID đó (chỉ dừng 6 PID của stack E2E).
 - Secret/mật khẩu test của stack E2E sinh ngẫu nhiên, nằm ngoài repo (scratchpad của phiên).
+
+## 8. Cập nhật sau review (14/11/2026)
+
+Theo quyết định của chủ repo:
+
+| Hạng mục | Kết quả |
+|---|---|
+| pgAdmin cổng 8081 | Đưa lên `develop` qua [#36](https://github.com/TrungLe05/vantix/pull/36) (branch protection yêu cầu PR) |
+| D24 — 10 vé/Order | Chốt |
+| D26 — OR08 | Chốt: nút "Cancel cart" chỉ cho CART ([#37](https://github.com/TrungLe05/vantix/pull/37), có E2E); PENDING_PAYMENT xem lại ở P4 (backend OR08 vẫn nhận PENDING_PAYMENT) |
+| Rotate `JWT_SECRET_KEY` | Đã thay trong `backend/.env` local (secret ngẫu nhiên 64 byte, không in, không commit; `.env` gốc không chứa khóa này, `.idea` không có run config giữ khóa). **Cần restart user-service và api-gateway**; mọi access/refresh token cũ mất hiệu lực → người dùng đăng nhập lại |
+| k6 | Cài k6 v2.4.0 (winget), chạy trên stack E2E: ghế 100 VU → 1/99, GA 200 VU/30 vé → 30/170, 0 lỗi, 5 bất biến đạt, expiry lag p95 1.25s. Độ trễ giữ vé p95 4.3s/7.5s do mọi request ghi của một event bị tuần tự hóa bằng advisory lock — chi tiết và gợi ý: `backend/services/order-service/k6/results/2026-11-14-contention.md` |
+
+Phát hiện thêm khi chạy k6: `--summary-export` ghi kèm access token của mọi buyer (`setup_data`). Đã bỏ khỏi file kết quả trước khi commit và đổi script sang `handleSummary` + `SUMMARY_FILE`.

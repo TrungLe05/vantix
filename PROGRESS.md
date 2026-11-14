@@ -9,7 +9,7 @@
 | P0 | Hạ tầng, khung 8 service, CI | ✅ Xong | Compose tự tạo 5 DB khi volume trống (init script); `docker-compose.prod.yml`, `Dockerfile` gốc rỗng |
 | P1 | User & Auth | ✅ Xong | 14 API, manual test; chưa có test tự động |
 | P2 | Product (catalog) | ✅ Xong phần API | 14 API (PR01–PR14); thiếu test, bootstrap DB |
-| P3 | Order: giỏ, hold, chống bán trùng | 🟡 Đã code | 9 API (OR01–OR08, OR05A) + UI; còn E2E, k6, test |
+| P3 | Order: giỏ, hold, chống bán trùng | ✅ Xong | 9 API + UI (có hủy giỏ CART); integration/concurrency test, E2E Playwright, k6 (đúng đắn đạt, thông lượng/event còn thấp) |
 | P4 | Payment (Stripe) | ⬜ Chưa bắt đầu | payment-service là khung rỗng |
 | P5 | Notification & check-in | ⬜ Chưa bắt đầu | notification-service khung rỗng → email OTP/STAFF chưa thực sự gửi |
 | P6 | Bot-detection | ⬜ Chưa bắt đầu | Chỉ `/health`; topic `cart.item_added` đã có producer |
@@ -75,4 +75,7 @@ Backlog có trạng thái/PR ở `TASKS.md`; quyết định mới D20–D26 ở
 - #32 `feat/order-list-paging-ticket-limit` (merged): OR02 phân trang + lọc status (`PageResponse`), giới hạn 10 vé/Order (`4012`, D24); frontend `getOrders` đọc `result.content`. 8 integration test mới.
 - #33 `feat/outbox-backoff-dead-letter` (merged): backoff lũy thừa + dead-letter + gauge cho `order_event_outbox`/`event_outbox` (migration order V2, product V4), producer `max.block.ms` 10s. Sửa lỗi publisher product đọc `cancelledAt` → trước đây hủy event làm cả outbox kẹt. 11 integration test outbox mới.
 - #34 `docs/order-or08-k6-readiness` (merged): đưa `k6/seat-contention.js` vào repo (trước bị `.gitignore`), sửa threshold GA, thêm `invariants.sql` (5 bất biến + expiry lag, đã chạy thử trên DB test) và README chạy/báo cáo; khuyến nghị OR08 (D26).
-- `test/e2e-playwright`: Playwright E2E ADMIN/BUYER trên stack riêng. Sửa 2 lỗi chỉ lộ khi chạy thật: (1) order-service thiếu `spring-boot-starter-kafka` (Boot 4) → `@KafkaListener` không đăng ký, `product.event-cancelled` chưa bao giờ được tiêu thụ (chỉ có lưới an toàn availability); (2) login/auth-callback chuyển tài khoản `mustChangePassword` tới `/change-password` nhưng trang không tồn tại (404, STAFF mới tạo không dùng được). Thêm `OrderEventListenerRegistrationTest` chặn hồi quy.
+- #35 `test/e2e-playwright` (merged): Playwright E2E ADMIN/BUYER trên stack riêng. Sửa 2 lỗi chỉ lộ khi chạy thật: (1) order-service thiếu `spring-boot-starter-kafka` (Boot 4) → `@KafkaListener` không đăng ký, `product.event-cancelled` chưa bao giờ được tiêu thụ (chỉ có lưới an toàn availability); (2) login/auth-callback chuyển tài khoản `mustChangePassword` tới `/change-password` nhưng trang không tồn tại (404, STAFF mới tạo không dùng được). Thêm `OrderEventListenerRegistrationTest` chặn hồi quy.
+- #36 (merged): pgAdmin cổng 8081. #37 (merged): nút "Cancel cart" cho CART (D26 chốt), D24 chốt 10 vé/Order.
+- Rotate `JWT_SECRET_KEY` trong `backend/.env` local (14/11/2026, không commit) — cần restart user-service + api-gateway, mọi phiên cũ đăng xuất.
+- `test/k6-contention-results`: chạy k6 thật (100 VU tranh ghế, 200 VU tranh 30 vé GA) — đúng đắn tuyệt đối, bất biến đạt, expiry lag p95 1.25s; độ trễ giữ vé p95 4.3–7.5s do khóa theo event. Script không còn ghi access token vào summary (bỏ `--summary-export`).

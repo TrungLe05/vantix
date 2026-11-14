@@ -1,6 +1,6 @@
 # k6 — tranh chấp ghế / GA (P3)
 
-Đo bằng số liệu lớp chống bán trùng (D08) qua Gateway thật. Trạng thái: **script sẵn sàng, chưa có kết quả** — máy dev hiện chưa cài `k6` và quy ước môi trường không cho pull image `grafana/k6` (TASKS.md, P3-B).
+Đo bằng số liệu lớp chống bán trùng (D08) qua Gateway thật. Kết quả lần chạy đầu: `results/2026-11-14-contention.md`.
 
 Bằng chứng đúng đắn hiện có (không thay được số liệu tải): `OrderConcurrencyIntegrationTest` — 20 buyer tranh 1 ghế → 1 hold, 30×1 GA trên 10 vé → 10, expire song song nhả đúng một lần (D23).
 
@@ -19,14 +19,16 @@ Bằng chứng đúng đắn hiện có (không thay được số liệu tải)
 ```bash
 set -a; . ./.env.local; set +a
 k6 run -e MODE=seat -e EVENT_ID=... -e TICKET_TYPE_ID=... -e SEAT_ID=... \
-  --summary-export results/seat-$(date +%Y%m%d-%H%M).json seat-contention.js
+  -e SUMMARY_FILE=results/$(date +%Y%m%d-%H%M)-seat.json seat-contention.js
 ```
 
 ```bash
 # GA: GA_AVAILABLE = availableQuantity của hạng GA ngay trước khi chạy
 k6 run -e MODE=ga -e EVENT_ID=... -e TICKET_TYPE_ID=... -e GA_AVAILABLE=3 \
-  --summary-export results/ga-$(date +%Y%m%d-%H%M).json seat-contention.js
+  -e SUMMARY_FILE=results/$(date +%Y%m%d-%H%M)-ga.json seat-contention.js
 ```
+
+**Không dùng `--summary-export`**: nó ghi kèm `setup_data` (access token của mọi buyer). `SUMMARY_FILE` đi qua `handleSummary` đã bỏ phần này.
 
 Threshold tự fail nếu số request giữ được khác kỳ vọng (seat: đúng 1; GA: `min(VU, GA_AVAILABLE)`), phần còn lại phải là 409.
 
@@ -40,7 +42,7 @@ docker exec -i postgres sh -c 'psql -U "$POSTGRES_USER" -d orders_service -v eve
 
 ## Báo cáo kết quả (`results/<ngày>-<mode>.md`)
 
-Kèm file `--summary-export`. Bắt buộc ghi: commit SHA (`git rev-parse HEAD`), số VU, thời gian chạy, request rate, p50/p90/p95/p99 `http_req_duration`, error rate (ngoài 409 kỳ vọng), `hold_success`/`hold_conflict`, kết quả 5 mục `invariants.sql`, expiry lag, cấu hình máy/Docker (CPU, RAM, phiên bản Postgres/Redis/Kafka).
+Kèm file `SUMMARY_FILE`. Bắt buộc ghi: commit SHA (`git rev-parse HEAD`), số VU, thời gian chạy, request rate, p50/p90/p95/p99 `http_req_duration`, error rate (ngoài 409 kỳ vọng), `hold_success`/`hold_conflict`, kết quả 5 mục `invariants.sql`, expiry lag, cấu hình máy/Docker (CPU, RAM, phiên bản Postgres/Redis/Kafka).
 
 ## Giới hạn
 

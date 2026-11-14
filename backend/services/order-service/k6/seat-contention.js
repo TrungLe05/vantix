@@ -1,6 +1,6 @@
 import http from "k6/http";
 import { check } from "k6";
-import { Counter } from "k6/metrics";
+import { Counter, Trend } from "k6/metrics";
 
 const apiBaseUrl = __ENV.API_BASE_URL || "http://localhost:8999/api";
 const eventId = __ENV.EVENT_ID;
@@ -10,6 +10,8 @@ const mode = __ENV.MODE || "seat";
 const runId = __ENV.RUN_ID || Date.now().toString();
 const successCount = new Counter("hold_success");
 const conflictCount = new Counter("hold_conflict");
+// Chỉ đo request giữ vé — http_req_duration còn gộp cả đăng nhập ở setup (bcrypt chậm)
+const holdDuration = new Trend("hold_duration", true);
 const orderResponseCallback = http.expectedStatuses(200, 201, 409);
 const loginResponseCallback = http.expectedStatuses(200);
 
@@ -42,6 +44,7 @@ if (!Number.isInteger(expectedSuccess)) {
 }
 
 export const options = {
+  summaryTrendStats: ["avg", "min", "med", "p(90)", "p(95)", "p(99)", "max"],
   scenarios: {
     [`${mode}_contention`]: {
       executor: "per-vu-iterations",
@@ -109,6 +112,7 @@ export default function (setupData) {
     },
   );
 
+  holdDuration.add(response.timings.duration);
   if (response.status === 201 || response.status === 200) successCount.add(1);
   if (response.status === 409) conflictCount.add(1);
   if (![200, 201, 409].includes(response.status)) {
@@ -124,4 +128,26 @@ export default function (setupData) {
   check(response, {
     "request either holds inventory or receives a conflict": (result) => result.status === 201 || result.status === 200 || result.status === 409,
   });
+}
+
+// Ghi summary JSON khi có SUMMARY_FILE. Không dùng --summary-export: nó ghi kèm setup_data
+// (access token của mọi buyer). Ở đây bỏ setup_data trước khi ghi.
+// Có handleSummary thì k6 không tự in summary nữa: in bản rút gọn ra stdout.
+export function handleSummary(data) {
+  const { setup_data: _omitTokens, ...safe } = data;
+  const lines = [];
+  for (const [name, metric] of Object.entries(data.metrics)) {
+    for (const [expr, result] of Object.entries(metric.thresholds ?? {})) {
+      lines.push(`${result.ok ? "PASS" : "FAIL"} ${name} ${expr}`);
+    }
+  }
+  const pick = (name) => data.metrics[name]?.values ?? {};
+  const fmt = (v) => (typeof v === "number" ? v.toFixed(2) : String(v));
+  for (const name of ["hold_success", "hold_conflict", "http_req_failed", "hold_duration"]) {
+    const values = Object.entries(pick(name)).map(([k, v]) => `${k}=${fmt(v)}`).join(" ");
+    lines.push(`${name}: ${values}`);
+  }
+  const outputs = { stdout: `${lines.join("\n")}\n` };
+  if (__ENV.SUMMARY_FILE) outputs[__ENV.SUMMARY_FILE] = JSON.stringify(safe, null, 2);
+  return outputs;
 }

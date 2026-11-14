@@ -42,7 +42,8 @@ Vantix là nền tảng bán vé sự kiện (vé ghế số SEATED + vé đứn
 | assistant | 9006 | — |
 
 - Service Java có `context-path: /api` → controller mapping **không** thêm `/api` (ví dụ `@RequestMapping("/events")`).
-- Tên DB trong `application.yaml` là nguồn sự thật (một số doc cũ ghi tên số ít, sai). `docker-compose` **không** tạo DB tự động → phải tạo DB trước khi chạy service mới, nếu không Flyway lỗi.
+- Tên DB trong `application.yaml` là nguồn sự thật (một số doc cũ ghi tên số ít, sai). `docker-compose` tạo 5 DB qua `docker/postgres/init/01-create-databases.sql` **chỉ khi volume Postgres còn trống**; volume cũ chạy tay script (README), nếu không Flyway lỗi.
+- Cổng dev phụ: pgAdmin 8081, Kafka UI 8085, RedisInsight 5540.
 
 ## 4. Convention backend
 
@@ -65,7 +66,7 @@ Vantix là nền tảng bán vé sự kiện (vé ghế số SEATED + vé đứn
 
 **Transaction & Kafka**
 - user-service: dùng `TransactionTemplate` bao riêng từng lệnh ghi (có pattern "ghi rồi mới ném lỗi"). product-service: `@Transactional` thường. Chọn theo service đang sửa.
-- Publish Kafka **sau khi commit** (product: `TransactionSynchronization.afterCommit`; user: sau `transactionTemplate.execute`). Lỗi publish chỉ log, không rollback. Key = id của aggregate.
+- Publish Kafka không được làm hỏng transaction nghiệp vụ. user: gửi sau `transactionTemplate.execute`, lỗi chỉ log (chấp nhận mất event). product (`event_outbox`) và order (`order_event_outbox`): **transactional outbox** — ghi cùng transaction, scheduler gửi + retry, consumer phải idempotent. Key = id của aggregate.
 - Hằng số topic ở `KafkaTopics`, payload là `record` trong `commonlib-kafka/event`. Chỉ thêm topic khi có code dùng.
 
 **DB**
@@ -89,7 +90,7 @@ Vantix là nền tảng bán vé sự kiện (vé ghế số SEATED + vé đứn
 - Không log/commit: mật khẩu, mật khẩu tạm, OTP, refresh token, payload Kafka `user.staff-account-created`.
 - Secret (`JWT_SECRET_KEY`, `OTP_HMAC_SECRET`, Google client, DB password…) lấy từ biến môi trường / `.env`. **Không** đọc/in/commit `.env`.
 - Refresh token đi bằng cookie `httpOnly` `Path=/api/auth`; access token chỉ giữ trong bộ nhớ ở frontend (không `localStorage`).
-- Khi gặp code đang log secret (ví dụ fingerprint JWT trong `JwtUtils`, đánh dấu "TẠM THỜI"): báo lại, không tự lan rộng.
+- Khi gặp code đang log secret/PII (message exception có thể chứa giá trị dữ liệu hoặc token): báo lại, không tự lan rộng. Chỉ log loại lỗi/mã lỗi và id nội bộ.
 
 ## 7. Frontend
 
@@ -114,13 +115,14 @@ Vantix là nền tảng bán vé sự kiện (vé ghế số SEATED + vé đứn
 | `docs/P0_infrastructure_summary.md`, `docs/P0_frontend_setup.md` | Hạ tầng, setup frontend |
 | `docs/auth/` | `P1_auth_design.md`, `P1_auth_api_design.md` (API đã khớp code, **mới hơn** design) |
 | `docs/product/` | `P2_product_design.md`, `P2_product_api_design.md`, `P2_product_ui_plan.md`, `P1_auth_ui_plan.md` |
-| `P3_order_*.md` (đang ở thư mục gốc) | Thiết kế P3 — nên chuyển vào `docs/order/` |
+| `docs/order/` | `P3_order_design.md`, `P3_order_api_design.md`, `P3_order_ui_plan.md` |
+| `README.md`, `ARCHITECTURE.md`, `DECISIONS.md`, `PROGRESS.md`, `TASKS.md` (gốc repo) | Tổng quan, kiến trúc, quyết định, tiến độ, backlog — cập nhật khi đổi trạng thái phase |
 
 Quy ước mỗi phase: `Pn_*_design.md` (quyết định, ERD, sequence) → `Pn_*_api_design.md` (hợp đồng API, errorCode, bước thực thi) → `Pn_*_ui_plan.md` (frontend). **Khi code lệch tài liệu, sửa tài liệu trong cùng thay đổi**; khi tài liệu lệch code đang chạy thì code là sự thật, báo lại để cập nhật doc.
 
 ## 9. Tiến độ
 
-P0 hạ tầng ✅ · P1 User & Auth ✅ (14 API) · P2 Product ✅ phần lớn (còn: bootstrap DB `products_service`, chưa có test) · P3 Order: **đã có thiết kế, chưa có code** (order-service mới là khung rỗng) · P4–P9 chưa bắt đầu. Repo chưa có test tự động đáng kể.
+P0 hạ tầng ✅ · P1 User & Auth ✅ (14 API) · P2 Product ✅ (có integration test) · P3 Order 🟡 đã code + test concurrency/integration (9 API, hold Redis + DB, outbox có dead-letter, consumer `product.event-cancelled`, UI cart; còn: E2E xuyên service + kết quả k6) · P4–P9 chưa bắt đầu. Integration test dùng Postgres/Redis thật (D21: compose local, service container ở CI, DB `*_test` tạo bằng `docker/postgres/test/create-test-databases.sql`). Chi tiết: `PROGRESS.md`, backlog: `TASKS.md`.
 
 ## 10. Cách làm việc với Claude
 

@@ -1,6 +1,6 @@
 # Vantix — Phase 2: Product — API Design
 
-> **Trạng thái:** Đã đối chiếu và cập nhật implementation trong `backend/services/product-service` (25/10/2026). Các mục điều chỉnh 1–4 đã hoàn thành; P2 vẫn còn việc bootstrap database và bổ sung test, xem mục “Kết quả audit implementation”.
+> **Trạng thái:** Đã đối chiếu và cập nhật implementation trong `backend/services/product-service` (25/10/2026; rà lại 13/11/2026: outbox PR06, `status` ghế ở PR11, `createdAt` ở PR08). Các mục điều chỉnh 1–4 đã hoàn thành; P2 vẫn còn việc bootstrap database và bổ sung test, xem mục “Kết quả audit implementation”.
 > **Liên quan:** `P2_product_design.md` (quyết định chốt, vòng đời Event, use case, ERD, sequence), `P1_auth_api_design.md` (quy ước chung dùng lại), `00_roadmap_phases_v1.md` (mục P2)
 > **Phạm vi:** toàn bộ API của `product-service` trong P2 (Venue, Event, SeatMap/Seat, TicketType). Mỗi API mô tả: request, response, lỗi (HTTP status + errorCode), các bước thực thi.
 
@@ -10,7 +10,7 @@
 |---|---|---|
 | PR01–PR14 | Đã có controller/service/repository tương ứng | Đã bổ sung PR14 cho danh sách quản trị; chưa có test tự động của product-service trong repository. |
 | PR05 — publish | Đã bổ sung kiểm tra thời gian | Thời gian diễn ra và sales window được gom chung với các lý do publish khác theo error 3105. |
-| PR06 — cancel + Kafka | Đã phát sau DB commit | Gửi Kafka được đăng ký trong `TransactionSynchronization.afterCommit`; lỗi gửi được log và không làm rollback DB. |
+| PR06 — cancel + Kafka | Transactional outbox (từ P3, migration `V3`) | Cùng transaction hủy event, Product ghi bản tin vào bảng `event_outbox`; `EventOutboxPublisher` poll mỗi 1 giây, gửi Kafka, lỗi thì retry sau 5 giây. Không còn dùng `TransactionSynchronization.afterCommit` cho luồng này. |
 | Danh sách ADMIN | Đã triển khai PR14 | Phân trang, lọc tùy chọn theo `DRAFT`/`PUBLISHED`/`CANCELLED`; chỉ ADMIN được gọi. |
 | Validation tên khi PATCH | Đã bổ sung | `name` nếu được gửi phải chứa ít nhất một ký tự không phải khoảng trắng; bỏ field vẫn hợp lệ với PATCH. |
 | Tên database/bootstrap | Cấu hình code là `products_service` | Docs đã được đồng bộ theo code; Compose hiện chưa tạo database này tường minh, vì vậy cần provision `products_service` trước khi Flyway chạy. |
@@ -101,7 +101,7 @@ Hủy event vẫn dùng Kafka từ Product sang Order. Availability được đ�
 
 1. **Không cần idempotency key**: khác Order/Payment (P3/P4), API ở đây chỉ ADMIN thao tác tay, tần suất thấp, không có rủi ro retry trùng ở quy mô cần chống.
 2. **Transaction**: dùng `@Transactional` ở mức method service bình thường — khác với `user-service` (phải dùng `TransactionTemplate` bọc riêng vì có pattern "ghi rồi mới ném lỗi" như reuse detection), ở đây **không có** pattern đó, nên `@Transactional` tiêu chuẩn là đủ và đơn giản hơn.
-3. **Publish Kafka sau khi commit**: `product.event-cancelled` chỉ publish sau khi transaction đổi `status=CANCELLED` đã commit, lỗi publish chỉ log, không rollback và không trả lỗi cho ADMIN (giống nguyên tắc đã chốt ở P1 mục 1.6 điểm 2).
+3. **Publish Kafka qua transactional outbox**: `product.event-cancelled` được ghi vào bảng `event_outbox` cùng transaction đổi `status=CANCELLED`; publisher nền gửi Kafka sau đó và retry tới khi broker nhận. Lỗi Kafka không làm hỏng response của ADMIN và không làm mất event (khác P1 vẫn là "gửi sau commit, lỗi chỉ log"). Vì có thể phát lặp, consumer phải idempotent.
 4. **Thêm ghế hàng loạt (PR10) là tất-cả-hoặc-không-gì**: một transaction duy nhất; bất kỳ ghế nào trùng (`section`+`rowLabel`+`seatNumber` trong cùng seat map, hoặc trùng ngay trong chính payload gửi lên) khiến toàn bộ request thất bại, không insert một phần.
 5. **Validate seat thuộc đúng event**: khi tạo `TicketType` loại SEATED (PR12), mọi `seatId` phải thuộc `SeatMap` của **chính event trong path**, không được tham chiếu ghế của event khác — chặn ở tầng service trước khi đụng DB.
 6. **Ẩn sự kiện DRAFT khỏi API công khai**: `GET /events` và `GET /events/{id}` không bao giờ trả event `DRAFT`. Với `GET /events/{id}`, event không tồn tại và event đang `DRAFT` dùng **chung một lỗi** `3101 EVENT_NOT_FOUND` — không để lộ sự tồn tại của event chưa publish (cùng tinh thần chống enumeration đã áp dụng ở P1).
@@ -288,7 +288,7 @@ Không phân trang; mảng rỗng nếu chưa có venue nào. Không có lỗi n
 
 `PATCH /api/events/{id}/publish` · ADMIN · không có request body
 
-**Response 200:** Event DTO với `status: "PUBLISHED"`.
+**Response 200:** Event DTO với `status: "PUBLISHED"`, `message: "Publish sự kiện thành công"`.
 
 **Lỗi**
 
@@ -343,9 +343,9 @@ Không phân trang; mảng rỗng nếu chưa có venue nào. Không có lỗi n
 **Các bước thực thi**
 
 1. Tải event → không có → `3101`; đã `CANCELLED` → `3103`. Cho phép hủy từ cả `DRAFT` và `PUBLISHED`.
-2. Trong transaction: `status = CANCELLED`.
-3. Sau khi commit: publish `product.event-cancelled` (payload: `eventId`, `cancelledAt`) — lỗi publish chỉ log, không ảnh hưởng response (mục 4 điểm 3).
-4. Trả 200.
+2. Trong một transaction: `status = CANCELLED` **và** insert `event_outbox` (`event_type = product.event-cancelled`, payload `{eventId, cancelledAt}`).
+3. Trả 200 với `message: "Hủy sự kiện thành công"`.
+4. `EventOutboxPublisher` gửi `product.event-cancelled` (key = `eventId`) và đánh dấu `published_at`; lỗi thì tăng `attempt_count`, thử lại sau 5 giây (mục 4 điểm 3).
 
 **Lưu ý:** Product lưu sự kiện vào transactional outbox cùng transaction hủy event và retry publish đến khi Kafka nhận. Từ P3, Order consume idempotently để hủy các Order chưa thanh toán và giải phóng hold; việc hoàn tiền Order đã thanh toán thuộc P4.
 
@@ -437,6 +437,7 @@ Kết quả sắp xếp theo `startAt` tăng dần. Response dùng chung `PageRe
     "salesEndAt": null,
     "status": "PUBLISHED",
     "bannerImageUrl": null,
+    "createdAt": "2026-10-01T02:00:00Z",
     "venue": { "id": "b1e...", "name": "Nhà hát Hòa Bình", "address": "240 3/2", "city": "Hồ Chí Minh" },
     "ticketTypes": [
       { "id": "t1...", "category": "SEATED", "name": "VIP", "price": 150.00, "totalQuantity": 120 },
@@ -528,7 +529,7 @@ Validation từng phần tử: mục 3. `displayLabel` **không** nhận từ cl
 
 1. Tải event (`3101`) → check `DRAFT` (`3102`) → tải seat map (`3202`).
 2. Kiểm tra trùng lặp **trong chính payload** (so sánh bộ ba `section+rowLabel+seatNumber`) → `3203` nếu có, liệt kê rõ phần tử trùng trong `message`.
-3. Trong **một transaction**: insert toàn bộ, mỗi dòng tự sinh `displayLabel`. Bắt `DataIntegrityViolationException` (trùng với ghế đã tồn tại từ trước, lớp chặn cuối qua unique index `(seat_map_id, section, row_label, seat_number)`) → map thành `3203`, rollback toàn bộ batch.
+3. Trong **một transaction**: insert toàn bộ (`saveAllAndFlush` — flush ngay để lỗi unique nổ trong service, không phải lúc commit), mỗi dòng tự sinh `displayLabel`. Bắt `DataIntegrityViolationException` (trùng với ghế đã tồn tại từ trước, lớp chặn cuối qua unique index `(seat_map_id, section, row_label, seat_number)`) → map thành `3203`, rollback toàn bộ batch.
 4. Trả 201 kèm danh sách ghế vừa tạo (để ADMIN lấy `id` dùng ngay cho PR12).
 
 ---
@@ -547,6 +548,7 @@ Validation từng phần tử: mục 3. `displayLabel` **không** nhận từ cl
     "seats": [
       {
         "id": "s1...", "section": "VIP", "rowLabel": "A", "seatNumber": "01", "displayLabel": "A-01",
+        "status": "ACTIVE",
         "ticketType": { "id": "t1...", "name": "VIP", "price": 150.00 }
       }
     ]
@@ -611,9 +613,9 @@ Validation từng phần tử: mục 3. `displayLabel` **không** nhận từ cl
 **Các bước thực thi**
 
 1. Tải event (`3101`) → check `DRAFT` (`3102`).
-2. Validate field-level + theo `category` (`1001`, `3302`, `3303`).
+2. Validate field-level + theo `category` (`1001` khi gửi `totalQuantity` với SEATED hoặc `seatIds` với GA, `3302`, `3303`). `seatIds` lặp được gộp trước khi kiểm tra.
 3. Nếu SEATED: tải toàn bộ `Seat` theo `seatIds` — thiếu bất kỳ id nào → `3204`; id thuộc `SeatMap` không gắn với event trong path → `3206`; id có `ticket_type_id` khác null → `3205`.
-4. Trong một transaction: insert `ticket_types` (`total_quantity = seatIds.size()` nếu SEATED, hoặc giá trị nhập tay nếu GA); nếu SEATED, `UPDATE seats SET ticket_type_id = :newId WHERE id IN (:seatIds)`.
+4. Trong một transaction: insert `ticket_types` (`total_quantity = seatIds.size()` nếu SEATED, hoặc giá trị nhập tay nếu GA); nếu SEATED, gán **nguyên tử** `UPDATE seats SET ticket_type_id = :newId WHERE seat_map_id = :mapId AND id IN (:seatIds) AND ticket_type_id IS NULL` — số dòng cập nhật khác số ghế (request khác vừa gán) → `3205`, rollback cả ticket type. Kiểm tra ở bước 3 chỉ để báo lỗi sớm.
 5. Trả 201.
 
 ---
@@ -665,9 +667,14 @@ Validation từng phần tử: mục 3. `displayLabel` **không** nhận từ cl
 
 | Topic | Producer | Consumer | Trạng thái | Payload |
 |---|---|---|---|---|
-| `product.event-cancelled` | product-service | order-service | **Publish ở P2; consume từ P3** | `{ eventId, cancelledAt }` |
+| `product.event-cancelled` | product-service (qua `event_outbox`) | order-service | **Đang chạy: publish + consume (P3)**; P4 bổ sung refund | `{ eventId, cancelledAt }`, key = `eventId` |
 
 Order cung cấp API availability trong P3; không tạo topic đồng bộ trạng thái ghế về Product.
+
+**Độ tin cậy outbox (D25).** Lỗi gửi: retry sau `5s × 2^attempt` (trần 5 phút); sau 10 lần → `dead_at` + log `ERROR OUTBOX_DEAD_LETTER …`, không retry nữa. Lô dừng ở lỗi đầu tiên. Gauge Micrometer `outbox.pending`/`outbox.dead` (tag `outbox`). Cấu hình: `app.outbox.base-backoff-ms`, `max-backoff-ms`, `max-attempts`. Xử lý tay bản ghi dead-letter sau khi sửa nguyên nhân:
+```sql
+UPDATE event_outbox SET dead_at = NULL, attempt_count = 0, next_attempt_at = now() WHERE dead_at IS NOT NULL;
+```
 
 ---
 

@@ -166,12 +166,15 @@ Product và Order dùng DB riêng nên consumer có eventual consistency. API c�
 - GA: conditional atomic update/row lock chỉ tăng held khi held + sold + requested <= total_quantity.
 - Tạo nhiều item áp dụng all-or-nothing trong một transaction.
 - Redis lỗi không được khiến DB chấp nhận oversell; hành vi fail-safe mô tả trong API design.
+- **Thứ tự khóa (D23):** mọi đường expire/hủy khóa **Order trước, Hold sau**; khi phải xử lý nhiều Order, lấy danh sách id (không nạp entity) rồi khóa từng Order theo id tăng dần và kiểm tra lại trạng thái sau khi khóa. Job định kỳ lấy Order quá hạn bằng `FOR NO KEY UPDATE SKIP LOCKED` — Order đang bị request khác khóa sẽ do request đó expire.
+- Kiểm chứng: `OrderConcurrencyIntegrationTest` (tranh ghế 20 buyer → 1 hold; tranh GA 30×1 trên 10 vé → 10; idempotency song song; expire đồng thời từ job/đọc/availability nhả đúng một lần; consumer hủy event lặp).
 
 ## 7. Kafka
 
 - Order phát `cart.item_added` khi buyer tạo/thêm item; P6 consume để phân tích bot.
 - Order consume product.event-cancelled để hủy/nhả Order chưa thanh toán.
 - Consumer idempotent. Payload không có email, tên hoặc IP thô.
+- Consumer cần `spring-boot-starter-kafka` (Boot 4 tách auto-configuration Kafka; thiếu thì `@KafkaListener` bị bỏ qua âm thầm — đã xảy ra trước 14/11/2026, `OrderEventListenerRegistrationTest` chặn hồi quy). Group id cấu hình bằng `app.order.kafka-consumer-group` (mặc định `order-service`) để stack test dùng chung cluster không tranh partition.
 - Schema/key được triển khai; transactional outbox retry lỗi publish. Consumer downstream phải idempotent vì Kafka có thể nhận thành công trước khi DB đánh dấu published.
 
 ## 8. Kiểm chứng và tiêu chí hoàn thành

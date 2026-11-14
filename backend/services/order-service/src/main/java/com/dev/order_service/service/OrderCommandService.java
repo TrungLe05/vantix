@@ -4,6 +4,7 @@ import com.dev.commonlib_api_response.exception.AppException;
 import com.dev.order_service.dto.request.OrderItemRequest;
 import com.dev.order_service.dto.response.AvailabilityResponse;
 import com.dev.order_service.dto.response.OrderResponse;
+import com.dev.order_service.dto.response.PageResponse;
 import com.dev.order_service.dto.response.ProductCatalog;
 import com.dev.order_service.dto.response.ValidatedCatalog;
 import com.dev.order_service.entity.Hold;
@@ -24,6 +25,9 @@ import com.dev.order_service.repository.OrderRepository;
 import com.dev.order_service.repository.TicketInventoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Page;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -62,6 +66,30 @@ public class OrderCommandService {
 
     @Value("${app.order.hold-duration:PT10M}")
     private Duration holdDuration;
+
+    // Tổng số vé (ghế + GA) tối đa của một Order — xem D24 về giá trị mặc định
+    @Value("${app.order.max-tickets-per-order:10}")
+    private int maxTicketsPerOrder;
+
+    /** Chặn sớm request tự nó đã vượt giới hạn, trước khi gọi Product hay chạm DB. */
+    public void requireWithinTicketLimit(List<OrderItemRequest> requests) {
+        long requested = requests.stream()
+                .mapToLong(r -> r.getQuantity() == null ? 0 : r.getQuantity())
+                .sum();
+        if (requested > maxTicketsPerOrder) {
+            throw new AppException(OrderErrorCode.TICKET_LIMIT_EXCEEDED);
+        }
+    }
+
+    // Gọi khi đã khóa Order: tổng vé ACTIVE hiện có + phần thêm không được vượt giới hạn
+    private void requireCapacityLeft(Order order, int additionalTickets) {
+        int current = orderItemRepository
+                .findByOrderIdAndItemStatusOrderByCreatedAtAsc(order.getId(), OrderItemStatus.ACTIVE)
+                .stream().mapToInt(OrderItem::getQuantity).sum();
+        if (current + additionalTickets > maxTicketsPerOrder) {
+            throw new AppException(OrderErrorCode.TICKET_LIMIT_EXCEEDED);
+        }
+    }
 
 
 
@@ -218,6 +246,7 @@ public class OrderCommandService {
         }
         int delta = targetQuantity - item.getQuantity();
         if (delta > 0) {
+            requireCapacityLeft(order, delta);
             ProductCatalog.TicketType type = catalog == null ? null : catalog.ticketTypes().get(item.getTicketTypeId());
             if (type == null || !"GENERAL_ADMISSION".equals(type.category())) {
                 throw new AppException(OrderErrorCode.INVALID_ORDER_ITEMS);
@@ -312,19 +341,23 @@ public class OrderCommandService {
     }
 
     @Transactional
-    public List<OrderResponse> getActiveOrders(UUID buyerId) {
-        List<Order> orders = orderRepository.findByBuyerIdAndStatusInOrderByCreatedAtDesc(
-                buyerId, UNPAID_ORDER_STATUSES
-        );
+    public PageResponse<OrderResponse> getOrders(UUID buyerId, List<OrderStatus> statuses, int page, int size) {
         Instant now = Instant.now();
-        for (Order order : orders) {
-            if (isExpired(order, now)) {
-                expireOrder(order, now);
-            }
-        }
-        return orderMapper.toResponses(orders.stream()
-                .filter(order -> UNPAID_ORDER_STATUSES.contains(order.getStatus()))
-                .toList());
+        // Expire trước khi nạp danh sách: khóa từng Order quá hạn và kiểm tra lại (job định kỳ hoặc
+        // request khác có thể vừa expire cùng Order), tránh lệch version với bản đã nạp sẵn
+        orderRepository.findExpiredIdsByBuyer(buyerId, UNPAID_ORDER_STATUSES, now).stream()
+                .sorted()
+                .forEach(orderId -> expireRelatedOrder(orderId, now));
+        Page<Order> orders = orderRepository.findByBuyerIdAndStatusIn(
+                buyerId, statuses, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
+        );
+        return PageResponse.<OrderResponse>builder()
+                .content(orderMapper.toResponses(orders.getContent()))
+                .page(orders.getNumber())
+                .size(orders.getSize())
+                .totalElements(orders.getTotalElements())
+                .totalPages(orders.getTotalPages())
+                .build();
     }
 
     @Transactional
@@ -343,9 +376,10 @@ public class OrderCommandService {
                         "ON CONFLICT (event_id) DO NOTHING",
                 eventId
         );
-        List<Order> orders = orderRepository.findByEventIdAndStatusIn(eventId, UNPAID_ORDER_STATUSES);
-        for (Order summary : orders) {
-            orderRepository.findByIdForUpdate(summary.getId()).ifPresent(order -> {
+        // Lấy id rồi mới khóa từng Order (xem OrderRepository.findIdsByEventIdAndStatusIn)
+        for (UUID orderId : orderRepository.findIdsByEventIdAndStatusIn(eventId, UNPAID_ORDER_STATUSES)
+                .stream().sorted().toList()) {
+            orderRepository.findByIdForUpdate(orderId).ifPresent(order -> {
                 if (UNPAID_ORDER_STATUSES.contains(order.getStatus())) {
                     cancelOrder(order);
                 }
@@ -442,6 +476,7 @@ public class OrderCommandService {
             expireOrder(order, now);
             throw new AppException(OrderErrorCode.HOLD_EXPIRED);
         }
+        requireCapacityLeft(order, requests.stream().mapToInt(OrderItemRequest::getQuantity).sum());
         for (OrderItemRequest request : requests) {
             ProductCatalog.TicketType type = catalog.ticketTypes().get(request.getTicketTypeId());
             if (type == null) {
@@ -613,21 +648,14 @@ public class OrderCommandService {
     }
 
     private void expireStaleHoldsForEvent(ValidatedCatalog catalog, Instant now) {
-        for (ProductCatalog.TicketType type : catalog.event().ticketTypes()) {
-            List<Hold> expired = holdRepository.findExpiredByTicketTypeIdForUpdate(
-                    type.id(), ACTIVE_HOLD_STATUSES, now
-            );
-            for (Hold hold : expired) {
-                expireRelatedOrder(hold.getOrderId(), now);
-            }
+        List<UUID> ticketTypeIds = catalog.event().ticketTypes().stream().map(ProductCatalog.TicketType::id).toList();
+        if (ticketTypeIds.isEmpty()) {
+            return;
         }
-        for (ProductCatalog.Seat seat : catalog.seats().values()) {
-            holdRepository.findBySeatIdAndStatusIn(seat.id(), ACTIVE_HOLD_STATUSES).ifPresent(hold -> {
-                if (!hold.getExpiresAt().isAfter(now)) {
-                    expireRelatedOrder(hold.getOrderId(), now);
-                }
-            });
-        }
+        // Khóa từng Order theo id tăng dần: các request cùng expire nhiều Order luôn khóa cùng thứ tự
+        holdRepository.findOrderIdsWithExpiredHolds(ticketTypeIds, ACTIVE_HOLD_STATUSES, now).stream()
+                .sorted()
+                .forEach(orderId -> expireRelatedOrder(orderId, now));
     }
 
     private void expireRelatedOrder(UUID orderId, Instant now) {

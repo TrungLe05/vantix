@@ -1,11 +1,13 @@
 package com.dev.order_service.service;
 
 import com.dev.commonlib_api_response.exception.AppException;
+import com.dev.commonlib_api_response.exception.CommonErrorCode;
 import com.dev.order_service.dto.request.AddOrderItemsRequest;
 import com.dev.order_service.dto.request.CreateOrderRequest;
 import com.dev.order_service.dto.request.OrderItemRequest;
 import com.dev.order_service.dto.response.AvailabilityResponse;
 import com.dev.order_service.dto.response.OrderResponse;
+import com.dev.order_service.dto.response.PageResponse;
 import com.dev.order_service.dto.response.ValidatedCatalog;
 import com.dev.order_service.enums.OrderStatus;
 import com.dev.order_service.enums.OrderErrorCode;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -28,6 +31,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderResponse create(UUID buyerId, CreateOrderRequest request, String idempotencyKey) {
         requireIdempotencyKey(idempotencyKey);
+        orderCommandService.requireWithinTicketLimit(request.getItems());
         String requestHash = requestHasher.hash(request.getEventId(), null, request.getItems());
         var replay = orderCommandService.replay(buyerId, "CREATE_CART", idempotencyKey, requestHash);
         if (replay.isPresent()) {
@@ -54,8 +58,24 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public List<OrderResponse> getOrders(UUID buyerId) {
-        return orderCommandService.getActiveOrders(buyerId);
+    public PageResponse<OrderResponse> getOrders(UUID buyerId, List<String> statuses, int page, int size) {
+        return orderCommandService.getOrders(buyerId, parseStatuses(statuses), page, size);
+    }
+
+    // Không truyền status → giữ hành vi cũ của OR02: chỉ Order đang hoạt động (CART, PENDING_PAYMENT)
+    private List<OrderStatus> parseStatuses(List<String> raw) {
+        if (raw == null || raw.stream().allMatch(s -> s == null || s.isBlank())) {
+            return List.of(OrderStatus.CART, OrderStatus.PENDING_PAYMENT);
+        }
+        try {
+            return raw.stream()
+                    .filter(StringUtils::hasText)
+                    .map(s -> OrderStatus.valueOf(s.trim().toUpperCase(Locale.ROOT)))
+                    .distinct()
+                    .toList();
+        } catch (IllegalArgumentException ex) {
+            throw new AppException(CommonErrorCode.VALIDATION_FAILED);
+        }
     }
 
     @Override
@@ -68,6 +88,7 @@ public class OrderServiceImpl implements OrderService {
             UUID buyerId, UUID orderId, AddOrderItemsRequest request, String idempotencyKey
     ) {
         requireIdempotencyKey(idempotencyKey);
+        orderCommandService.requireWithinTicketLimit(request.getItems());
         String operation = "ADD_ITEMS:" + orderId;
         String requestHash = requestHasher.hash(null, orderId, request.getItems());
         var replay = orderCommandService.replay(buyerId, operation, idempotencyKey, requestHash);

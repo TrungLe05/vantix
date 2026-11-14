@@ -1,7 +1,7 @@
 # Vantix — Phase 1: User & Auth — API Design
 
 > **Trạng thái:** Đã triển khai — nội dung khớp với code `user-service` và `api-gateway` khi hoàn thành P1 (14 API, đã manual test).
-> **Liên quan:** `P1_auth_design.md` (use case, ERD, sequence — **cần cập nhật theo mục 0**), `P0_infrastructure_summary.md`, `00_roadmap_phases_v1.md` (mục P1)
+> **Liên quan:** `P1_auth_design.md` (use case, ERD, sequence — đã cập nhật theo mục 0 ngày 13/11/2026), `P0_infrastructure_summary.md`, `00_roadmap_phases_v1.md` (mục P1)
 > **Phạm vi:** toàn bộ API của `user-service` trong P1 (auth + user + tạo STAFF) và phần xác thực JWT tại `api-gateway`. Mỗi API mô tả: request, response, lỗi (HTTP status + errorCode), các bước thực thi.
 
 ---
@@ -24,7 +24,7 @@ Trong quá trình code, thiết kế ban đầu (`P1_auth_design.md` và bản A
 | 10 | ✏️ | Không dùng `@Transactional` trên service; dùng `TransactionTemplate` bao riêng từng lệnh ghi (mục 1.6) | Tránh rollback nhầm khi vừa ghi vừa ném lỗi, và method `@Modifying @Query` tự viết không tự có transaction |
 | 11 | ➕ | Seed sẵn tài khoản ADMIN + STAFF khi khởi động (mục 7) | Không có API nào tạo ADMIN đầu tiên |
 
-**Cần cập nhật `P1_auth_design.md`:** ERD bỏ bảng `USER_OTP` và cột `REFRESH_TOKENS.expires_at`; sequence 4.1 và 4.6 (OTP ở Redis); 4.3 (refresh đọc từ cookie); 4.4 (`oauth2Login()` + bước exchange); 4.2/4.3 (response nhận token qua cookie).
+**Đã cập nhật `P1_auth_design.md` (13/11/2026):** ERD bỏ bảng `USER_OTP` và cột `REFRESH_TOKENS.expires_at`; sequence 4.1 và 4.6 (OTP ở Redis); 4.3 (refresh đọc từ cookie); 4.4 (`oauth2Login()` + bước exchange); 4.2/4.3 (response nhận token qua cookie).
 
 ---
 
@@ -137,7 +137,7 @@ Phân nhóm trong dải user-service:
 |---|---|---|
 | `otp:{purpose}:{userId}` | JSON `{otpCodeHash, attemptCount}` | 10 phút |
 | `otp:cooldown:{purpose}:{userId}` | `"1"` | 60 giây |
-| `oauth:code:{code}` | `userId` | 60 giây |
+| `oauth:code:{code}` | `"{userId}:{isNewUser}"` (cờ dùng cho onboarding Google lần đầu, xem A07) | 60 giây |
 
 `purpose` là `EMAIL_VERIFICATION` hoặc `FORGOT_PASSWORD`.
 
@@ -258,12 +258,12 @@ Ghi chú Gateway: route công khai là A01–A08, A10, A11 (khai theo cặp `MET
 1. Validate; chuẩn hóa email.
 2. Tìm user theo email → không có → `2301` (cùng lỗi với OTP sai để không lộ email có tồn tại).
 3. `status = ACTIVE` → `2002`; `status = LOCKED` → `2103`.
-4. Đọc `otp:EMAIL_VERIFICATION:{userId}` từ Redis:
+4–5. Kiểm tra OTP bằng **một Lua script** trên `otp:EMAIL_VERIFICATION:{userId}` (nguyên tử phía Redis, nên N request song song không làm mất lượt đếm sai và mã đúng chỉ qua được một lần):
    - Không có key → `2301`.
    - `attemptCount ≥ 5` → `2303`.
-5. So khớp hash OTP bằng so sánh **constant-time** (`MessageDigest.isEqual`).
-   - Sai → tăng `attemptCount` và ghi lại **giữ nguyên TTL còn lại** (nếu đặt lại TTL đầy đủ, việc nhập sai liên tục sẽ tự gia hạn OTP vô thời hạn) → `2301`.
+   - So khớp HMAC của mã nhập với hash lưu trữ. Sai → tăng `attemptCount`, ghi lại bằng `SET … KEEPTTL` (**giữ nguyên TTL còn lại**; nếu đặt lại TTL đầy đủ, việc nhập sai liên tục sẽ tự gia hạn OTP vô thời hạn) → `2301`.
    - Đúng → xóa key OTP (dùng một lần).
+   - So sánh trong Lua không constant-time; chấp nhận được vì hai vế đều là HMAC tính phía server, kẻ tấn công không biết secret.
 6. Trong một transaction: cập nhật `users.status = ACTIVE`.
 7. Trả 200 (không tự đăng nhập, không trả token).
 
@@ -291,7 +291,7 @@ Ghi chú Gateway: route công khai là A01–A08, A10, A11 (khai theo cặp `MET
 
 1. Validate; chuẩn hóa email.
 2. Tìm user; **chỉ tiếp tục nếu tồn tại và `status = PENDING_VERIFICATION`**, ngược lại trả 200 im lặng.
-3. Cooldown: nếu tồn tại khóa `otp:cooldown:EMAIL_VERIFICATION:{userId}` → trả 200 im lặng, không gửi thêm (trả 429 sẽ làm lộ email tồn tại; frontend tự đếm ngược 60s ở nút "Gửi lại").
+3. Cooldown: chiếm khóa `otp:cooldown:EMAIL_VERIFICATION:{userId}` bằng `SET NX EX 60` (nguyên tử: hai request gửi lại song song chỉ một request sinh OTP). Không chiếm được → trả 200 im lặng, không gửi thêm (trả 429 sẽ làm lộ email tồn tại; frontend tự đếm ngược 60s ở nút "Gửi lại").
 4. Sinh OTP mới. Việc ghi khóa OTP **ghi đè OTP cũ** nên không cần bước vô hiệu hóa riêng; đồng thời đặt lại khóa cooldown 60 giây.
 5. Publish `user.email-verification-requested`.
 6. Trả 200. (Không có lệnh ghi DB nên không cần transaction.)
@@ -532,7 +532,7 @@ Set-Cookie: refreshToken=; Path=/api/auth; Max-Age=0; HttpOnly; SameSite=Lax
 
 1. Validate; chuẩn hóa email.
 2. Chỉ tiếp tục nếu user tồn tại và `status = ACTIVE`; ngược lại (không tồn tại / `PENDING_VERIFICATION` / `LOCKED`) trả 200 im lặng.
-3. Cooldown: nếu tồn tại khóa `otp:cooldown:FORGOT_PASSWORD:{userId}` → trả 200 im lặng.
+3. Cooldown: chiếm khóa `otp:cooldown:FORGOT_PASSWORD:{userId}` bằng `SET NX EX 60`; không chiếm được → trả 200 im lặng.
 4. Sinh OTP `FORGOT_PASSWORD` (ghi đè OTP cũ nếu còn, đặt cooldown 60 giây).
 5. Publish `user.forgot-password-requested`.
 6. Trả 200.
@@ -718,7 +718,7 @@ Thứ tự xử lý mỗi request:
 | 401 | 9003 | TOKEN_EXPIRED | Access token hết hạn | **Gọi A08 refresh rồi thử lại** |
 | 403 | 9004 | PASSWORD_CHANGE_REQUIRED | JWT có `mcp=true` mà gọi API ngoài allowlist | Chuyển tới màn hình đổi mật khẩu |
 
-Route công khai (khai dạng `METHOD /path`): `POST /api/auth/register`, `verify-email`, `resend-verification`, `login`, `oauth2/exchange`, `refresh`, `forgot-password`, `reset-password`; `GET /api/oauth2/authorization/**`; `GET /api/login/oauth2/code/**`; `GET /api/*/health` (health của các service Python).
+Route công khai (khai dạng `METHOD /path`): `POST /api/auth/register`, `verify-email`, `resend-verification`, `login`, `oauth2/exchange`, `refresh`, `forgot-password`, `reset-password`; `GET /api/oauth2/authorization/**`; `GET /api/login/oauth2/code/**`; `GET /api/*/health` (health của các service Python). Từ P2/P3 danh sách có thêm `GET /api/venues`, `GET /api/events`, `GET /api/events/*`, `GET /api/events/*/seat-map`, `GET /api/orders/events/*/availability` — nguồn sự thật là `app.gateway.public-endpoints` trong `api-gateway/src/main/resources/application.yaml`.
 
 Allowlist khi `mcp=true`: `PATCH /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/users/me`.
 
@@ -783,7 +783,7 @@ Mã `2302 OTP_EXPIRED` đã bị bỏ (gộp vào `2301`, xem mục 0 điểm 3)
 | `server.forward-headers-strategy: framework` | user-service | Để `redirect_uri` OAuth theo host của Gateway |
 | `app.gateway.public-endpoints`, `app.gateway.password-change-allowlist` | api-gateway | Danh sách `METHOD /path` |
 | `spring.cloud.gateway.server.webflux.globalcors` | api-gateway | Origin frontend, `allow-credentials: true` |
-| `app.run-config.default-admin.*`, `app.run-config.default-staff.*` | user-service | Tài khoản seed (mục 7) |
+| `app.run-config.default-admin.*`, `app.run-config.default-staff.*`, `app.run-config.default-buyer.password` | user-service | Tài khoản seed (mục 7) |
 
 Dependency: `user-service` dùng `commonlib-api-response`, `commonlib-kafka`, `commonlib-security`, `commonlib-jwt`; `api-gateway` dùng `commonlib-jwt` và `commonlib-api-response`, không dùng `commonlib-security`.
 
@@ -791,7 +791,7 @@ Dependency: `user-service` dùng `commonlib-api-response`, `commonlib-kafka`, `c
 
 ## 7. Dữ liệu seed (môi trường dev)
 
-`ApplicationRunConfig` (một `ApplicationRunner`) tạo sẵn 1 tài khoản `ADMIN` và 1 tài khoản `STAFF` khi khởi động nếu email chưa tồn tại, đọc từ `app.run-config.default-admin.*` / `default-staff.*`. Cả hai `status=ACTIVE`, `must_change_password=false`, email được chuẩn hóa (trim + lowercase); khởi động lại không tạo trùng. Đây là cách có tài khoản ADMIN đầu tiên để gọi A14.
+`ApplicationRunConfig` (một `ApplicationRunner`) tạo sẵn 1 tài khoản `ADMIN`, 1 tài khoản `STAFF` và 5 tài khoản `BUYER` (`buyer0`…`buyer4@gmail.com`, dùng chung mật khẩu `app.run-config.default-buyer.password` — phục vụ test P3/k6) khi khởi động nếu email chưa tồn tại, đọc từ `app.run-config.default-admin.*` / `default-staff.*` / `default-buyer.*`. Tất cả `status=ACTIVE`, `must_change_password=false`, email được chuẩn hóa (trim + lowercase); khởi động lại không tạo trùng. Đây là cách có tài khoản ADMIN đầu tiên để gọi A14.
 
 Chỉ dùng cho dev: không commit mật khẩu thật vào file cấu hình (lấy từ biến môi trường), và phải tắt/giới hạn theo profile khi deploy (P9).
 
@@ -802,7 +802,7 @@ Chỉ dùng cho dev: không commit mật khẩu thật vào file cấu hình (l�
 1. **Access token còn hiệu lực đến hết TTL** sau logout hoặc đổi mật khẩu (Gateway verify stateless, không tra DB). Chấp nhận ở P1.
 2. **Chưa có rate limiting / khóa tài khoản** khi sai mật khẩu nhiều lần (thuộc P9). OTP thì có giới hạn 5 lần.
 3. **Kafka không dùng outbox:** mất event nếu Kafka lỗi ngay sau commit; lối thoát là `resend-verification` / `forgot-password`.
-4. **OTP ở Redis không được xử lý nguyên tử:** bộ đếm sai và bước "kiểm tra rồi xóa" là đọc-rồi-ghi, nên dưới tải đồng thời số lần đoán thực tế có thể vượt 5 một chút, và hai request đúng OTP cùng lúc đều có thể qua. Đủ cho mức P1; nếu cần siết thì chuyển sang `INCR`/Lua script. Ngoài ra không phân biệt được "hết hạn" với "chưa từng có" (mục 0 điểm 3).
+4. ~~OTP ở Redis không được xử lý nguyên tử~~ — đã sửa (13/11/2026): kiểm tra OTP chạy trong một Lua script, cooldown dùng `SET NX`; có integration test song song (`OtpServiceIntegrationTest`). Vẫn không phân biệt được "hết hạn" với "chưa từng có" (mục 0 điểm 3).
 5. **Chưa thu thập device fingerprint** (cột `device_fingerprint_hash` để NULL) — thuộc P6/P8.
 6. **Trust-The-Gateway:** cổng của service không được expose trực tiếp; siết ở P9.
 7. **Cookie khác domain:** khi frontend và backend khác domain cần `SameSite=None` + `Secure` (HTTPS kể cả dev).
@@ -811,4 +811,4 @@ Chỉ dùng cho dev: không commit mật khẩu thật vào file cấu hình (l�
 
 ---
 
-*Hết tài liệu API design P1 (đã cập nhật khớp code). Bước tiếp theo: cập nhật `P1_auth_design.md` theo mục 0, rồi sang P2 — Product.*
+*Hết tài liệu API design P1 (đã cập nhật khớp code). `P1_auth_design.md` đã được đồng bộ theo mục 0.*

@@ -19,6 +19,11 @@ public class KafkaProducerConfig {
     @Value("${spring.kafka.bootstrap-servers:localhost:9092}")
     private String bootstrapServers;
 
+    // Mặc định Kafka là 60s: khi broker sập, send() chặn luồng gọi (request user-service, scheduler
+    // outbox) tới 60s trước khi báo lỗi. 10s đủ cho broker chậm, đủ ngắn để fail nhanh.
+    @Value("${app.kafka.producer.max-block-ms:10000}")
+    private long maxBlockMs;
+
     @Bean
     public ProducerFactory<String, Object> producerFactory() {
         Map<String, Object> config = new HashMap<>();
@@ -30,6 +35,7 @@ public class KafkaProducerConfig {
         config.put("spring.json.add.type.headers", false);
         config.put(ProducerConfig.ACKS_CONFIG, "all");
         config.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        config.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
         return new DefaultKafkaProducerFactory<>(config);
     }
 

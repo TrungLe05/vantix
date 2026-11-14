@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Thư mục sinh ra: build E2E (NEXT_DIST_DIR) và báo cáo Playwright
+    ".next-*/**",
+    "test-results/**",
+    "playwright-report/**",
   ]),
 ]);
 

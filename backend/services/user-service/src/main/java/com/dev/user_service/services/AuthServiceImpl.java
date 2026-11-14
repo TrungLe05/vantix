@@ -149,8 +149,9 @@ public class AuthServiceImpl implements AuthService {
         userRepository.findByEmailAndDeletedAtIsNull(email)
                 .filter(user -> user.getStatus() == UserStatus.PENDING_VERIFICATION)
                 .ifPresent(user -> {
-                    // Cooldown 60s: nếu đang trong cooldown, coi như đã "gửi" (im lặng), không sinh OTP mới
-                    if (otpService.isInCooldown(user.getId(), OtpPurpose.EMAIL_VERIFICATION)) {
+                    // Cooldown 60s: nếu đang trong cooldown, coi như đã "gửi" (im lặng), không sinh OTP mới.
+                    // Chiếm cooldown nguyên tử trước khi sinh OTP để request song song không cùng gửi mã
+                    if (!otpService.tryStartCooldown(user.getId(), OtpPurpose.EMAIL_VERIFICATION)) {
                         return;
                     }
 
@@ -313,7 +314,7 @@ public class AuthServiceImpl implements AuthService {
         userRepository.findByEmailAndDeletedAtIsNull(email)
                 .filter(user -> user.getStatus() == UserStatus.ACTIVE)
                 .ifPresent(user -> {
-                    if (otpService.isInCooldown(user.getId(), OtpPurpose.FORGOT_PASSWORD)) {
+                    if (!otpService.tryStartCooldown(user.getId(), OtpPurpose.FORGOT_PASSWORD)) {
                         return;
                     }
 

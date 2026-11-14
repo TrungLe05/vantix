@@ -83,6 +83,9 @@ app:
       - GET /api/orders/events/*/availability
       # Stripe gọi webhook không có JWT; payment-service xác thực bằng chữ ký Stripe-Signature
       - POST /api/payments/webhooks/stripe
+      # Handshake WebSocket: trình duyệt không gửi được header Authorization, nên xác thực bằng
+      # ticket một lần (lấy qua POST /api/notifications/ws-ticket có JWT), xem D35
+      - GET /api/notifications/ws
     password-change-allowlist:
       - PATCH /api/auth/change-password
       - POST /api/auth/logout

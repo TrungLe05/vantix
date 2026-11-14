@@ -19,6 +19,7 @@ public class OrderMapper {
 
     private final OrderItemRepository orderItemRepository;
     private final OrderRefundRepository orderRefundRepository;
+    private final TicketService ticketService;
 
     public OrderResponse toResponse(Order order) {
         List<OrderItem> allItems = orderItemRepository.findByOrderIdOrderByCreatedAtAsc(order.getId());
@@ -47,6 +48,8 @@ public class OrderMapper {
                 .holdExpiresAt(order.getHoldExpiresAt())
                 .paidAt(order.getPaidAt())
                 .refund(toRefundResponse(order))
+                // Giỏ chưa thanh toán không có vé: bỏ truy vấn cho đường đọc nóng
+                .tickets(isActiveCart(order) ? List.of() : ticketService.getTickets(order.getId()))
                 .items(items)
                 .build();
     }

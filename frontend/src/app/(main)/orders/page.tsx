@@ -4,17 +4,32 @@ import Link from "next/link";
 import { ArrowRight, ShoppingBag } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { EventFooter, EventHeader } from "@/components/events/EventHeader";
-import { getOrders } from "@/lib/api/orders";
+import { getOrders, getPurchasedOrders } from "@/lib/api/orders";
 import { getErrorMessage } from "@/lib/api/client";
 import { getEvent } from "@/lib/api/events";
 import type { Order } from "@/types/orders";
+
+const purchaseLabel: Partial<Record<Order["status"], string>> = {
+  PAID: "Paid",
+  TICKETS_ISSUED: "Paid",
+  REFUND_PENDING: "Refund in progress",
+  REFUNDED: "Refunded",
+};
 
 function CartCard({ order }: { order: Order }) {
   const eventQuery = useQuery({
     queryKey: ["event", order.eventId],
     queryFn: () => getEvent(order.eventId),
   });
-  const count = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const purchased = order.status in purchaseLabel;
+  // Đơn đang/đã hoàn: vé đã chuyển CANCELLED, vẫn đếm để buyer biết đơn gồm bao nhiêu vé
+  const count = order.items
+    .filter((item) =>
+      order.status === "REFUND_PENDING" || order.status === "REFUNDED"
+        ? item.status === "CANCELLED"
+        : item.status === "ACTIVE",
+    )
+    .reduce((sum, item) => sum + item.quantity, 0);
   return (
     <Link
       href={`/orders/${order.id}`}
@@ -23,7 +38,8 @@ function CartCard({ order }: { order: Order }) {
       <div className="flex items-start justify-between gap-5">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-            {order.status === "CART" ? "Held tickets" : "Payment pending"}
+            {purchaseLabel[order.status] ??
+              (order.status === "CART" ? "Held tickets" : "Payment pending")}
           </p>
           <h2 className="mt-2 truncate font-heading text-lg font-bold">
             {eventQuery.data?.name ??
@@ -31,11 +47,19 @@ function CartCard({ order }: { order: Order }) {
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {count} {count === 1 ? "ticket" : "tickets"} ·{" "}
-            {order.status === "CART" ? "Hold expires " : "Hold deadline "}
+            {purchased
+              ? "Paid "
+              : order.status === "CART"
+                ? "Hold expires "
+                : "Pay before "}
             {new Intl.DateTimeFormat("en-US", {
               dateStyle: "medium",
               timeStyle: "short",
-            }).format(new Date(order.holdExpiresAt))}
+            }).format(
+              new Date(
+                purchased && order.paidAt ? order.paidAt : order.holdExpiresAt,
+              ),
+            )}
           </p>
         </div>
         <span className="shrink-0 text-sm font-bold">
@@ -46,9 +70,11 @@ function CartCard({ order }: { order: Order }) {
         </span>
       </div>
       <div className="mt-5 flex items-center justify-between border-t border-border pt-4 text-sm">
-        <span className="text-muted-foreground">One cart per event</span>
+        <span className="text-muted-foreground">
+          {purchased ? "Order details and refund" : "One cart per event"}
+        </span>
         <span className="inline-flex items-center gap-2 font-semibold text-primary">
-          Open cart{" "}
+          {purchased ? "View order" : "Open cart"}{" "}
           <ArrowRight
             aria-hidden="true"
             className="size-4 transition-transform group-hover:translate-x-1"
@@ -62,6 +88,11 @@ function CartCard({ order }: { order: Order }) {
 export default function OrdersPage() {
   const query = useQuery({ queryKey: ["orders"], queryFn: getOrders });
   const activeOrders = query.data ?? [];
+  const purchasesQuery = useQuery({
+    queryKey: ["orders", "purchased"],
+    queryFn: getPurchasedOrders,
+  });
+  const purchases = purchasesQuery.data ?? [];
   return (
     <div className="min-h-screen bg-background text-foreground">
       <EventHeader />
@@ -126,6 +157,46 @@ export default function OrdersPage() {
         {activeOrders.length ? (
           <div className="mt-8 grid gap-4">
             {activeOrders.map((order) => (
+              <CartCard key={order.id} order={order} />
+            ))}
+          </div>
+        ) : null}
+        <h2 className="mt-12 font-heading text-xl font-bold tracking-tight">
+          Purchases
+        </h2>
+        {purchasesQuery.isPending ? (
+          <div
+            role="status"
+            aria-label="Loading purchases"
+            className="mt-4 h-36 animate-pulse rounded-2xl bg-muted"
+          />
+        ) : null}
+        {purchasesQuery.isError ? (
+          <section
+            role="alert"
+            className="mt-4 rounded-2xl border border-destructive/30 p-6"
+          >
+            <h3 className="font-semibold">Could not load your purchases</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {getErrorMessage(purchasesQuery.error)}
+            </p>
+            <button
+              type="button"
+              onClick={() => void purchasesQuery.refetch()}
+              className="mt-4 min-h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground"
+            >
+              Try again
+            </button>
+          </section>
+        ) : null}
+        {purchasesQuery.isSuccess && purchases.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Paid orders will appear here.
+          </p>
+        ) : null}
+        {purchases.length ? (
+          <div className="mt-4 grid gap-4">
+            {purchases.map((order) => (
               <CartCard key={order.id} order={order} />
             ))}
           </div>

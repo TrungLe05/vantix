@@ -100,6 +100,36 @@ test.describe("BUYER — giữ vé, giỏ hàng, xác nhận", () => {
   });
 });
 
+test.describe("BUYER — hủy giỏ (OR08, chỉ CART)", () => {
+  test("hủy giỏ nhả vé ngay; giỏ đã xác nhận không có nút hủy", async ({ page }) => {
+    const api = await adminApi();
+    const event = await seedEvent(api, { name: uniqueName("E2E cancel cart"), gaQuantity: 3 });
+    await api.dispose();
+
+    await login(page, buyer(1));
+    await holdGa(page, event.id, event.name, 3);
+    await expect(page).toHaveURL(/\/orders\//);
+
+    // Đóng hộp xác nhận bằng "Keep cart" thì không hủy
+    const openCancel = page.getByRole("main").getByRole("button", { name: "Cancel cart" });
+    await openCancel.click();
+    await page.getByRole("button", { name: "Keep cart" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByRole("button", { name: /Confirm cart/ })).toBeVisible();
+
+    await openCancel.click();
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel cart" }).click();
+    await expect(page.getByRole("button", { name: /Confirm cart/ })).toHaveCount(0);
+
+    // Tồn được nhả ngay (không phải chờ hết hạn 10 phút): kho chỉ có 3 vé mà giữ lại được đủ 3
+    await holdGa(page, event.id, event.name, 3);
+    await expect(page).toHaveURL(/\/orders\//);
+    await page.getByRole("button", { name: /Confirm cart/ }).click();
+    await expect(page.getByText("Your cart is confirmed")).toBeVisible();
+    await expect(page.getByRole("main").getByRole("button", { name: "Cancel cart" })).toHaveCount(0);
+  });
+});
+
 test.describe("ADMIN hủy sự kiện → giỏ của BUYER bị hủy (Kafka product.event-cancelled)", () => {
   test("giỏ đang giữ chuyển sang hủy sau khi ADMIN hủy sự kiện", async ({ page }) => {
     const api = await adminApi();

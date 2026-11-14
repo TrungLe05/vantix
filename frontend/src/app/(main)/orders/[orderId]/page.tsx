@@ -22,6 +22,15 @@ import {
 } from "@/components/events/EventHeader";
 import { getEvent } from "@/lib/api/events";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  cancelOrder,
   confirmOrder,
   getAvailability,
   getOrder,
@@ -113,13 +122,22 @@ export default function OrderCartPage() {
     mutationFn: () => confirmOrder(orderId),
     onSuccess: updateOrder,
   });
+  const [isCancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelOrder(orderId),
+    onSuccess: async (next) => {
+      setCancelDialogOpen(false);
+      await updateOrder(next);
+    },
+  });
   const orderQuery = useQuery({
     queryKey: ["order", orderId],
     queryFn: () => getOrder(orderId),
     refetchInterval:
       removeMutation.isPending ||
       quantityMutation.isPending ||
-      confirmMutation.isPending
+      confirmMutation.isPending ||
+      cancelMutation.isPending
         ? false
         : 15_000,
   });
@@ -158,7 +176,10 @@ export default function OrderCartPage() {
   const isLoading = orderQuery.isPending;
   const error = orderQuery.error ?? eventQuery.error;
   const message =
-    quantityMutation.error ?? removeMutation.error ?? confirmMutation.error;
+    quantityMutation.error ??
+    removeMutation.error ??
+    confirmMutation.error ??
+    cancelMutation.error;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -551,6 +572,23 @@ export default function OrderCartPage() {
                     the next phase.
                   </p>
                 ) : null}
+                {/* OR08 chỉ cho CART: hủy khi PENDING_PAYMENT cần phối hợp với Payment, để tới P4 (D26) */}
+                {isCart && !expired && !cancelled ? (
+                  <button
+                    type="button"
+                    onClick={() => setCancelDialogOpen(true)}
+                    disabled={
+                      cancelMutation.isPending ||
+                      confirmMutation.isPending ||
+                      removeMutation.isPending ||
+                      quantityMutation.isPending
+                    }
+                    className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-destructive transition hover:bg-destructive/5 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 aria-hidden="true" className="size-4" />
+                    Cancel cart
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => router.push("/")}
@@ -565,6 +603,43 @@ export default function OrderCartPage() {
         ) : null}
       </main>
       <EventFooter />
+      <Dialog
+        open={isCancelDialogOpen}
+        onOpenChange={(open) => {
+          if (!cancelMutation.isPending) setCancelDialogOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel this cart?</DialogTitle>
+            <DialogDescription>
+              All tickets in this cart are released right away so other buyers
+              can get them. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setCancelDialogOpen(false)}
+              disabled={cancelMutation.isPending}
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold hover:bg-muted"
+            >
+              Keep cart
+            </button>
+            <button
+              type="button"
+              onClick={() => cancelMutation.mutate()}
+              disabled={cancelMutation.isPending}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-destructive px-4 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {cancelMutation.isPending ? (
+                <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
+              ) : null}
+              {cancelMutation.isPending ? "Cancelling…" : "Cancel cart"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -36,6 +36,7 @@ flowchart TD
 3. Banner xung đột seat/GA và trạng thái availability mới.
 4. Loading skeleton cho cart fetch/confirm; chống gửi lặp khi request chạy.
 5. Expired/cancelled state với hành động quay lại chọn vé.
+6. Nút "Cancel cart" (OR08) chỉ khi CART, có hộp xác nhận; nhả vé ngay (D26). PENDING_PAYMENT không có nút (P4).
 6. Empty cart với đường dẫn về event/discovery.
 7. Confirm handoff cho PENDING_PAYMENT, nêu rõ bước thanh toán sẽ được nối ở P4.
 

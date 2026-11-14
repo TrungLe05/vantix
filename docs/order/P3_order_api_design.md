@@ -139,7 +139,7 @@ Gateway allowlist endpoint này cho phép màn hình public đọc; UI ghép v�
 ### OR08 — Hủy giỏ
 DELETE /api/orders/{orderId} · BUYER
 
-Buyer tự hủy Order chưa thanh toán (CART hoặc PENDING_PAYMENT): nhả mọi hold đúng một lần (hold → RELEASED, item → CANCELLED) và chuyển Order sang CANCELLED. Gọi lại trên Order đã CANCELLED/EXPIRED trả nguyên trạng (idempotent tự nhiên, không cần key). Order ở trạng thái khác trả 4005. Frontend hiện chưa dùng endpoint này.
+Buyer tự hủy Order chưa thanh toán (CART hoặc PENDING_PAYMENT): nhả mọi hold đúng một lần (hold → RELEASED, item → CANCELLED) và chuyển Order sang CANCELLED. Gọi lại trên Order đã CANCELLED/EXPIRED trả nguyên trạng (idempotent tự nhiên, không cần key). Order ở trạng thái khác trả 4005. Frontend dùng endpoint này cho nút "Cancel cart" **chỉ khi CART** (D26); hủy PENDING_PAYMENT phía backend vẫn được nhưng cần thiết kế lại ở P4 (phối hợp Payment).
 
 ## 4. Thứ tự xử lý đề xuất
 

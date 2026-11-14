@@ -27,9 +27,9 @@
 | D21 | Integration test dùng Postgres/Redis thật: compose local, service container ở CI | Chốt |
 | D22 | OTP nguyên tử: Lua script cho verify, `SET NX` cho cooldown | Chốt |
 | D23 | Order: thứ tự khóa Order → Hold, khóa theo id, job expire `SKIP LOCKED` | Chốt |
-| D24 | Tối đa 10 vé mỗi Order (cấu hình được) | Chốt tạm — chờ chủ sản phẩm xác nhận con số |
+| D24 | Tối đa 10 vé mỗi Order (cấu hình được) | Chốt (chủ sản phẩm xác nhận 14/11/2026) |
 | D25 | Outbox: backoff lũy thừa, dead-letter sau 10 lần, gauge + log ERROR làm tín hiệu alert | Chốt |
-| D26 | OR08 (hủy giỏ) ở frontend: dùng cho CART, hoãn PENDING_PAYMENT tới P4 | **Đề xuất** — chờ quyết định nghiệp vụ |
+| D26 | OR08 (hủy giỏ) ở frontend: dùng cho CART, hoãn PENDING_PAYMENT tới P4 | Chốt (14/11/2026); PENDING_PAYMENT xem lại ở P4 |
 
 ---
 
@@ -115,9 +115,9 @@ Roadmap/design P3 không quy định con số; trước đây không có giới 
 ### D25 — Retry, dead-letter và alert cho outbox
 Trước: retry cố định 5s, vô hạn, không có tín hiệu khi kẹt. Chọn: backoff `base × 2^attempt` trần 5 phút (Kafka sập lâu thì không dội DB/log mỗi 5s), sau 10 lần (~25 phút) đánh dấu `dead_at` thay vì xóa (giữ dữ liệu để requeue tay bằng SQL) — "DLQ" là trạng thái trong cùng bảng chứ không phải topic DLQ riêng, vì lỗi ở phía producer (không gửi được) nên topic DLQ cũng không gửi được. Lô dừng ở lỗi đầu tiên; producer `max.block.ms` hạ từ 60s xuống 10s (`app.kafka.producer.max-block-ms`, commonlib-kafka — cũng giảm thời gian request user-service bị treo khi Kafka sập). Alert: gauge `outbox.pending`/`outbox.dead` và log `OUTBOX_DEAD_LETTER`; chưa có Prometheus/Alertmanager (P9) nên rule alert (`outbox_dead > 0`, `outbox_pending` tăng liên tục) mới ở mức tài liệu. Viết test phát hiện thêm lỗi: publisher product đọc `cancelledAt` bằng `getTimestamp()` không parse được `Instant.toString()` → mọi lần hủy event làm cả outbox kẹt; đã sửa.
 
-### D26 — (Đề xuất) Dùng OR08 hủy giỏ ở frontend
+### D26 — Dùng OR08 hủy giỏ ở frontend (chỉ CART)
 Hiện trạng: `DELETE /api/orders/{id}` đã có và có test (hủy CART/PENDING_PAYMENT, nhả hold đúng một lần, idempotent), frontend chưa gọi; buyer muốn bỏ giỏ phải xóa từng item (OR05, item cuối → CANCELLED) hoặc chờ hết hạn 10 phút.
 - **Lợi:** nhả ghế/GA ngay cho người khác thay vì giữ chết tới 10 phút — quan trọng nhất đúng lúc mở bán tranh chấp; một hành động rõ ràng thay cho xóa từng dòng.
 - **Rủi ro:** (1) Với PENDING_PAYMENT, sau P4 buyer có thể hủy trong lúc Stripe đang xử lý → thanh toán thành công cho Order đã hủy. (2) Vòng giữ–hủy nhanh có thể bị bot dùng để "xoay" tồn kho (P6 cần tín hiệu này; P9 rate limit).
 - **Khuyến nghị:** thêm nút "Hủy giỏ" (có hộp xác nhận) ở trang order detail **chỉ khi `status = CART`**; chưa hiển thị cho PENDING_PAYMENT. Khi thiết kế P4: hoặc giới hạn OR08 phía backend chỉ cho CART, hoặc bắt buộc hủy PaymentIntent thành công trước khi hủy Order (Payment xác nhận qua Kafka). Đưa sự kiện hủy giỏ vào feature P6 (`cart.cancelled` nếu cần).
-- Chưa triển khai theo yêu cầu — cần chủ sản phẩm chốt.
+- **Đã chốt 14/11/2026**: nút "Cancel cart" (hộp xác nhận "Keep cart"/"Cancel cart") ở trang order detail, chỉ hiện khi `status = CART`, chưa hết hạn, event chưa hủy; E2E `buyer.spec.ts` kiểm tồn được nhả ngay và giỏ PENDING_PAYMENT không có nút. Backend OR08 vẫn nhận PENDING_PAYMENT — **việc của P4**: giới hạn chỉ CART hoặc hủy PaymentIntent trước.

@@ -212,7 +212,7 @@ Chưa có logic ML (Isolation Forest) hay tích hợp LLM — đó là phạm vi
 | Service | Image | Port | Ghi chú |
 |---|---|---|---|
 | postgres | `postgres:14-alpine3.23` | 5432 | Healthcheck bằng `pg_isready` |
-| pgadmin | `dpage/pgadmin4:9.18.0` | 8080 | |
+| pgadmin | `dpage/pgadmin4:9.18.0` | 8081 | Đổi từ 8080 (14/11/2026) vì 8080 hay bị tiến trình khác trên máy dev chiếm |
 | redis | `redis:alpine3.23` | 6379 | Healthcheck bằng `redis-cli ping` |
 | redis-insight | `redis/redisinsight:3.2` | 5540 | |
 | kafka | `apache/kafka:4.3.1` | 9092 (host), 9093 (docker network) | KRaft combined mode, dual listener HOST/DOCKER |

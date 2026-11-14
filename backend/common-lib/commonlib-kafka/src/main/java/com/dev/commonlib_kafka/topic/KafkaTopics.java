@@ -16,4 +16,13 @@ public final class KafkaTopics {
 
     // order-service (P3)
     public static final String ORDER_CART_ITEM_ADDED = "cart.item_added";
+
+    // order-service → payment-service (P4)
+    public static final String ORDER_REFUND_REQUESTED = "order.refund-requested";
+
+    // payment-service → order-service (P4)
+    public static final String PAYMENT_SUCCEEDED = "payment.succeeded";
+    public static final String PAYMENT_FAILED = "payment.failed";
+    public static final String REFUND_COMPLETED = "refund.completed";
+    public static final String REFUND_FAILED = "refund.failed";
 }

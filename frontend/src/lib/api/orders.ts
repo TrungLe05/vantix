@@ -1,6 +1,12 @@
 import { apiClient } from "./client";
 import type { ApiResponse, PaginatedResponse } from "@/types/common";
-import type { CheckoutSession, Order, RefundQuote } from "@/types/orders";
+import { isAxiosError } from "axios";
+import type {
+  CheckInResult,
+  CheckoutSession,
+  Order,
+  RefundQuote,
+} from "@/types/orders";
 
 // OR02 trả trang; không truyền status = Order đang hoạt động (CART, PENDING_PAYMENT).
 // Mỗi buyer có tối đa một CART mỗi event nên 100 phần tử đủ cho giỏ hàng/trang orders hiện tại.
@@ -130,4 +136,41 @@ export async function requestRefund(orderId: string) {
   );
   if (!response.data.result) throw new Error("Could not request a refund");
   return response.data.result;
+}
+
+// OR12 — ảnh QR của vé (PNG, cần JWT nên tải bằng apiClient rồi tạo object URL)
+export async function getTicketQr(orderId: string, ticketId: string) {
+  const response = await apiClient.get<Blob>(
+    `/orders/${orderId}/tickets/${ticketId}/qr`,
+    { responseType: "blob" },
+  );
+  return response.data;
+}
+
+export type CheckInOutcome =
+  | { outcome: "CHECKED_IN"; ticket: CheckInResult }
+  | { outcome: "ALREADY_CHECKED_IN"; ticket: CheckInResult };
+
+// OR13 — quét vé (ADMIN/STAFF). Quét trùng (4017) không phải lỗi hệ thống: trả về lần quét trước để
+// STAFF xử lý tại chỗ; các lỗi khác (4016 không tìm thấy, 4018 vé đã hủy) ném ra như bình thường.
+export async function checkInTicket(
+  eventId: string,
+  code: string,
+): Promise<CheckInOutcome> {
+  try {
+    const response = await apiClient.post<ApiResponse<CheckInResult>>(
+      "/orders/tickets/check-in",
+      { eventId, code },
+    );
+    if (!response.data.result) throw new Error("Could not check in this ticket");
+    return { outcome: "CHECKED_IN", ticket: response.data.result };
+  } catch (error) {
+    if (isAxiosError<ApiResponse<CheckInResult>>(error)) {
+      const data = error.response?.data;
+      if (data?.code === 4017 && data.result) {
+        return { outcome: "ALREADY_CHECKED_IN", ticket: data.result };
+      }
+    }
+    throw error;
+  }
 }

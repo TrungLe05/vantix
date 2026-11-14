@@ -30,6 +30,18 @@
 	</properties>
 	<dependencies>
 		<dependency>
+			<groupId>com.dev</groupId>
+			<artifactId>commonlib-api-response</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.dev</groupId>
+			<artifactId>commonlib-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.dev</groupId>
+			<artifactId>commonlib-kafka</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
@@ -44,6 +56,20 @@
 		<dependency>
 			<groupId>org.springframework.kafka</groupId>
 			<artifactId>spring-kafka</artifactId>
+		</dependency>
+		<!-- Boot 4: thiếu starter này thì @KafkaListener bị bỏ qua âm thầm (đã gặp ở order-service) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-kafka</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+		<!-- Gọi user-service lấy email người nhận (D34), cùng cách Order gọi Product/Payment -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-openfeign</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -66,6 +92,11 @@
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 

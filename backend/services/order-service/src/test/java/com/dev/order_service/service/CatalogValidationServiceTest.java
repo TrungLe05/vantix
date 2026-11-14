@@ -59,7 +59,7 @@ class CatalogValidationServiceTest {
 
     @Test
     void loadCatalogSkipsSeatMapWhenEventHasNone() {
-        when(client.getEvent(EVENT_ID)).thenReturn(new ProductCatalog(EVENT_ID, "PUBLISHED", null, null,
+        when(client.getEvent(EVENT_ID)).thenReturn(new ProductCatalog(EVENT_ID, "PUBLISHED", null, null, null,
                 false, List.of(ga())));
 
         assertThat(service.loadCatalog(EVENT_ID).seats()).isEmpty();
@@ -146,7 +146,7 @@ class CatalogValidationServiceTest {
     void ticketTypeWithoutPriceOrUnknownCategoryIsInvalid() {
         UUID noPrice = UUID.randomUUID();
         UUID weird = UUID.randomUUID();
-        when(client.getEvent(EVENT_ID)).thenReturn(new ProductCatalog(EVENT_ID, "PUBLISHED", null, null, false,
+        when(client.getEvent(EVENT_ID)).thenReturn(new ProductCatalog(EVENT_ID, "PUBLISHED", null, null, null, false,
                 List.of(new ProductCatalog.TicketType(noPrice, "GENERAL_ADMISSION", "Free?", null, 5),
                         new ProductCatalog.TicketType(weird, "VIP_LOUNGE", "Lounge", BigDecimal.ONE, 5))));
 
@@ -178,7 +178,7 @@ class CatalogValidationServiceTest {
     // ---------- helpers ----------
 
     private void stubEvent(String status, Instant salesStart, Instant salesEnd) {
-        when(client.getEvent(EVENT_ID)).thenReturn(new ProductCatalog(EVENT_ID, status, salesStart, salesEnd, true,
+        when(client.getEvent(EVENT_ID)).thenReturn(new ProductCatalog(EVENT_ID, status, null, salesStart, salesEnd, true,
                 List.of(new ProductCatalog.TicketType(SEATED_ID, "SEATED", "VIP", new BigDecimal("150.00"), 2),
                         new ProductCatalog.TicketType(OTHER_SEATED_ID, "SEATED", "Standard", new BigDecimal("80.00"), 1),
                         ga())));

@@ -19,7 +19,10 @@ public enum OrderErrorCode implements ErrorCode {
     EVENT_INVENTORY_NOT_READY(4009, "Tồn kho sự kiện chưa sẵn sàng", HttpStatus.SERVICE_UNAVAILABLE),
     PRODUCT_SERVICE_UNAVAILABLE(4010, "Không thể xác minh thông tin sự kiện", HttpStatus.SERVICE_UNAVAILABLE),
     IDEMPOTENCY_KEY_REQUIRED(4011, "Thiếu Idempotency-Key", HttpStatus.BAD_REQUEST),
-    TICKET_LIMIT_EXCEEDED(4012, "Vượt quá số vé tối đa cho một đơn hàng", HttpStatus.BAD_REQUEST);
+    TICKET_LIMIT_EXCEEDED(4012, "Vượt quá số vé tối đa cho một đơn hàng", HttpStatus.BAD_REQUEST),
+    PAYMENT_SERVICE_UNAVAILABLE(4013, "Không thể khởi tạo thanh toán, vui lòng thử lại", HttpStatus.SERVICE_UNAVAILABLE),
+    ORDER_NOT_PAYABLE(4014, "Đơn hàng không đủ điều kiện thanh toán trực tuyến", HttpStatus.CONFLICT),
+    REFUND_NOT_ALLOWED(4015, "Đơn hàng không đủ điều kiện hoàn tiền", HttpStatus.CONFLICT);
 
     private final int code;
     private final String message;

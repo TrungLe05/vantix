@@ -3,6 +3,8 @@ package com.dev.order_service.service;
 import com.dev.order_service.dto.request.AddOrderItemsRequest;
 import com.dev.order_service.dto.request.CreateOrderRequest;
 import com.dev.order_service.dto.response.AvailabilityResponse;
+import com.dev.order_service.dto.response.CheckoutResponse;
+import com.dev.order_service.dto.response.RefundQuoteResponse;
 import com.dev.order_service.dto.response.OrderResponse;
 import com.dev.order_service.dto.response.PageResponse;
 
@@ -19,4 +21,7 @@ public interface OrderService {
     OrderResponse cancel(UUID buyerId, UUID orderId);
     OrderResponse confirm(UUID buyerId, UUID orderId, String idempotencyKey);
     AvailabilityResponse getAvailability(UUID eventId);
+    CheckoutResponse checkout(UUID buyerId, UUID orderId);
+    RefundQuoteResponse getRefundQuote(UUID buyerId, UUID orderId);
+    OrderResponse requestRefund(UUID buyerId, UUID orderId);
 }

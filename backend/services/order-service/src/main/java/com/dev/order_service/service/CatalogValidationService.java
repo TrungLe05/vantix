@@ -49,6 +49,11 @@ public class CatalogValidationService {
         return new ValidatedCatalog(event, Map.copyOf(ticketTypes), Map.copyOf(seats));
     }
 
+    /** Giờ bắt đầu sự kiện theo Product (mốc tính % hoàn vé). Product lỗi → fail closed như mọi lần gọi khác. */
+    public Instant eventStartAt(UUID eventId) {
+        return productCatalogClient.getEvent(eventId).startAt();
+    }
+
     public void validateSaleWindow(ProductCatalog event) {
         Instant now = Instant.now();
         if (!"PUBLISHED".equals(event.status())

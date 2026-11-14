@@ -1,6 +1,15 @@
 package com.dev.order_service.service;
 
 import com.dev.commonlib_api_response.exception.AppException;
+import com.dev.commonlib_kafka.event.PaymentFailedEvent;
+import com.dev.commonlib_kafka.event.PaymentSucceededEvent;
+import com.dev.commonlib_kafka.event.RefundCompletedEvent;
+import com.dev.commonlib_kafka.event.RefundFailedEvent;
+import com.dev.commonlib_kafka.event.RefundRequestedEvent;
+import com.dev.order_service.entity.OrderRefund;
+import com.dev.order_service.enums.RefundReason;
+import com.dev.order_service.enums.RefundStatus;
+import com.dev.order_service.repository.OrderRefundRepository;
 import com.dev.order_service.dto.request.OrderItemRequest;
 import com.dev.order_service.dto.response.AvailabilityResponse;
 import com.dev.order_service.dto.response.OrderResponse;
@@ -52,7 +61,10 @@ public class OrderCommandService {
     private static final List<HoldStatus> ACTIVE_HOLD_STATUSES = List.of(HoldStatus.HELD, HoldStatus.CONFIRMED);
     private static final List<OrderStatus> UNPAID_ORDER_STATUSES =
             List.of(OrderStatus.CART, OrderStatus.PENDING_PAYMENT);
+    private static final List<OrderStatus> PAID_ORDER_STATUSES =
+            List.of(OrderStatus.PAID, OrderStatus.TICKETS_ISSUED);
 
+    private final OrderRefundRepository orderRefundRepository;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final HoldRepository holdRepository;
@@ -285,11 +297,182 @@ public class OrderCommandService {
         if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.EXPIRED) {
             return orderMapper.toResponse(order);
         }
-        if (!UNPAID_ORDER_STATUSES.contains(order.getStatus())) {
+        // Chỉ hủy được giỏ CART (D26/D27): ở PENDING_PAYMENT buyer có thể đang trả tiền trên Stripe,
+        // hủy lúc này dễ dẫn tới thu tiền cho đơn đã hủy. Đơn chờ thanh toán tự hết hạn theo deadline hold.
+        if (order.getStatus() != OrderStatus.CART) {
             throw new AppException(OrderErrorCode.ORDER_STATE_CONFLICT);
         }
         cancelOrder(order);
         return orderMapper.toResponse(order);
+    }
+
+    // ---------- P4: kết quả thanh toán và hoàn tiền ----------
+
+    /**
+     * payment.succeeded: PENDING_PAYMENT → PAID, hold → PURCHASED, tồn GA chuyển held → sold.
+     * Idempotent: Order đã PAID/đang hoàn thì bỏ qua. Order đã EXPIRED/CANCELLED (vé đã nhả cho
+     * người khác) thì không "hồi sinh" mà yêu cầu hoàn 100% — tiền vào trễ không được làm bán trùng.
+     */
+    @Transactional
+    public void handlePaymentSucceeded(PaymentSucceededEvent event) {
+        Order order = orderRepository.findByIdForUpdate(event.orderId()).orElse(null);
+        if (order == null) {
+            log.error("payment.succeeded cho Order không tồn tại, orderId={} paymentId={}",
+                    event.orderId(), event.paymentId());
+            return;
+        }
+        switch (order.getStatus()) {
+            case PENDING_PAYMENT -> markPaid(order, event);
+            case EXPIRED, CANCELLED -> {
+                log.warn("LATE_PAYMENT orderId={} status={} paymentId={}; yêu cầu hoàn 100%",
+                        order.getId(), order.getStatus(), event.paymentId());
+                createRefund(order, RefundReason.LATE_PAYMENT, 100, event.amount());
+            }
+            case CART -> log.error("payment.succeeded cho Order còn CART, orderId={} paymentId={}",
+                    order.getId(), event.paymentId());
+            default -> log.debug("payment.succeeded lặp, orderId={} status={}", order.getId(), order.getStatus());
+        }
+    }
+
+    private void markPaid(Order order, PaymentSucceededEvent event) {
+        // Còn PENDING_PAYMENT nghĩa là hold chưa bị nhả (job expire chưa chạm tới), kể cả khi vừa quá
+        // deadline vài trăm ms: vé vẫn đang giữ cho buyer này nên chấp nhận thanh toán.
+        List<Hold> holds = holdRepository.findActiveByOrderIdForUpdate(order.getId(), ACTIVE_HOLD_STATUSES);
+        if (holds.isEmpty()) {
+            throw new IllegalStateException("Order PENDING_PAYMENT không còn hold hiệu lực: " + order.getId());
+        }
+        Instant now = Instant.now();
+        for (Hold hold : holds) {
+            if (hold.getSeatId() == null
+                    && ticketInventoryRepository.confirmSale(hold.getTicketTypeId(), hold.getQuantity(), now) != 1) {
+                throw new IllegalStateException("Không chuyển được tồn GA held → sold, holdId=" + hold.getId());
+            }
+            hold.setStatus(HoldStatus.PURCHASED);
+        }
+        if (event.amount() == null || event.amount().compareTo(order.getTotalAmount()) != 0) {
+            // Order đóng băng ở PENDING_PAYMENT nên không thể lệch; nếu lệch là lỗi tích hợp cần xem tay
+            log.error("PAYMENT_AMOUNT_MISMATCH orderId={} paymentId={}", order.getId(), event.paymentId());
+        }
+        order.setStatus(OrderStatus.PAID);
+        order.setPaidAt(event.paidAt() != null ? event.paidAt() : now);
+        orderRepository.save(order);
+        log.info("Order đã thanh toán, orderId={} paymentId={}", order.getId(), event.paymentId());
+    }
+
+    /** payment.failed: nhả hold nếu Order còn chờ thanh toán; các trạng thái khác đã được xử lý. */
+    @Transactional
+    public void handlePaymentFailed(PaymentFailedEvent event) {
+        orderRepository.findByIdForUpdate(event.orderId()).ifPresent(order -> {
+            if (order.getStatus() != OrderStatus.PENDING_PAYMENT) {
+                return;
+            }
+            if (PaymentFailedEvent.REASON_EXPIRED.equals(event.reason())) {
+                expireOrder(order, Instant.now());
+            } else {
+                cancelOrder(order);
+            }
+        });
+    }
+
+    /**
+     * Buyer hủy đơn đã thanh toán. {@code percent} do caller tính theo {@link RefundPolicy} từ giờ
+     * bắt đầu sự kiện (gọi Product ngoài transaction). Gọi lại khi đã REFUND_PENDING/REFUNDED trả
+     * nguyên trạng thái hiện tại.
+     */
+    @Transactional
+    public OrderResponse requestRefund(UUID buyerId, UUID orderId, int percent) {
+        Order order = orderRepository.findOwnedForUpdate(orderId, buyerId)
+                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
+        if (order.getStatus() == OrderStatus.REFUND_PENDING || order.getStatus() == OrderStatus.REFUNDED) {
+            return orderMapper.toResponse(order);
+        }
+        if (!PAID_ORDER_STATUSES.contains(order.getStatus()) || percent <= 0) {
+            throw new AppException(OrderErrorCode.REFUND_NOT_ALLOWED);
+        }
+        refundPaidOrder(order, RefundReason.BUYER_REQUEST, percent);
+        orderRepository.flush();
+        return orderMapper.toResponse(order);
+    }
+
+    @Transactional
+    public void handleRefundCompleted(RefundCompletedEvent event) {
+        // Khóa Order trước rồi mới đọc refund (cùng thứ tự với mọi đường ghi khác)
+        orderRepository.findByIdForUpdate(event.orderId()).ifPresent(order ->
+                orderRefundRepository.findById(event.refundId()).ifPresent(refund -> {
+                    if (refund.getStatus() == RefundStatus.COMPLETED) {
+                        return;
+                    }
+                    refund.setStatus(RefundStatus.COMPLETED);
+                    refund.setFailureReason(null);
+                    refund.setCompletedAt(event.completedAt() != null ? event.completedAt() : Instant.now());
+                    // Thanh toán trễ: Order giữ EXPIRED/CANCELLED, chỉ refund đổi trạng thái
+                    if (order.getStatus() == OrderStatus.REFUND_PENDING) {
+                        order.setStatus(OrderStatus.REFUNDED);
+                        orderRepository.save(order);
+                    }
+                }));
+    }
+
+    @Transactional
+    public void handleRefundFailed(RefundFailedEvent event) {
+        orderRepository.findByIdForUpdate(event.orderId()).ifPresent(order ->
+                orderRefundRepository.findById(event.refundId()).ifPresent(refund -> {
+                    if (refund.getStatus() != RefundStatus.REQUESTED) {
+                        return;
+                    }
+                    refund.setStatus(RefundStatus.FAILED);
+                    refund.setFailureReason(event.reason() == null || event.reason().length() <= 100
+                            ? event.reason() : event.reason().substring(0, 100));
+                    // Order giữ REFUND_PENDING: tiền vẫn nợ buyer, cần xử lý tay
+                    log.error("REFUND_FAILED orderId={} refundId={} reason={}",
+                            order.getId(), refund.getId(), refund.getFailureReason());
+                }));
+    }
+
+    // Gọi khi đã khóa Order đang PAID: trả vé về kho ngay (buyer đã từ bỏ vé / event đã hủy) rồi
+    // ghi yêu cầu hoàn; việc chuyển tiền do Payment làm bất đồng bộ.
+    private void refundPaidOrder(Order order, RefundReason reason, int percent) {
+        Instant now = Instant.now();
+        for (Hold hold : holdRepository.findActiveByOrderIdForUpdate(order.getId(), List.of(HoldStatus.PURCHASED))) {
+            if (hold.getSeatId() == null
+                    && ticketInventoryRepository.releaseSold(hold.getTicketTypeId(), hold.getQuantity(), now) != 1) {
+                log.error("Could not release sold GA inventory: holdId={}, ticketTypeId={}, quantity={}",
+                        hold.getId(), hold.getTicketTypeId(), hold.getQuantity());
+                throw new AppException(OrderErrorCode.EVENT_INVENTORY_NOT_READY);
+            }
+            hold.setStatus(HoldStatus.RELEASED);
+            orderItemRepository.findByIdAndOrderId(hold.getOrderItemId(), order.getId())
+                    .ifPresent(item -> item.setItemStatus(OrderItemStatus.CANCELLED));
+            deleteRedisAfterCommit(redisKey(hold));
+        }
+        order.setStatus(OrderStatus.REFUND_PENDING);
+        orderRepository.save(order);
+        createRefund(order, reason, percent, RefundPolicy.amount(order.getTotalAmount(), percent));
+    }
+
+    // Idempotent theo Order: uq_order_refunds_order_id là lớp chặn cuối, check ở đây để không ném lỗi
+    // khi consumer nhận lại bản tin
+    private void createRefund(Order order, RefundReason reason, int percent, BigDecimal amount) {
+        if (orderRefundRepository.findByOrderId(order.getId()).isPresent()) {
+            return;
+        }
+        if (amount == null || amount.signum() <= 0) {
+            log.error("Bỏ qua refund số tiền không dương, orderId={} reason={}", order.getId(), reason);
+            return;
+        }
+        OrderRefund refund = orderRefundRepository.saveAndFlush(OrderRefund.builder()
+                .orderId(order.getId())
+                .buyerId(order.getBuyerId())
+                .reason(reason)
+                .refundPercent(percent)
+                .amount(amount)
+                .currency(order.getCurrency())
+                .status(RefundStatus.REQUESTED)
+                .build());
+        orderEventPublisher.recordRefundRequested(new RefundRequestedEvent(
+                refund.getId(), order.getId(), order.getBuyerId(), amount, order.getCurrency(),
+                reason.name(), Instant.now()
+        ), order.getEventId());
     }
 
     @Transactional
@@ -382,6 +565,16 @@ public class OrderCommandService {
             orderRepository.findByIdForUpdate(orderId).ifPresent(order -> {
                 if (UNPAID_ORDER_STATUSES.contains(order.getStatus())) {
                     cancelOrder(order);
+                }
+            });
+        }
+        // P4: đơn đã thanh toán của event bị hủy được hoàn 100% (D16). Chạy lại không tạo refund thứ
+        // hai vì Order đã rời trạng thái PAID sau lần đầu.
+        for (UUID orderId : orderRepository.findIdsByEventIdAndStatusIn(eventId, PAID_ORDER_STATUSES)
+                .stream().sorted().toList()) {
+            orderRepository.findByIdForUpdate(orderId).ifPresent(order -> {
+                if (PAID_ORDER_STATUSES.contains(order.getStatus())) {
+                    refundPaidOrder(order, RefundReason.EVENT_CANCELLED, 100);
                 }
             });
         }

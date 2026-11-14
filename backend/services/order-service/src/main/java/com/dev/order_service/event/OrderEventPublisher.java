@@ -1,16 +1,21 @@
 package com.dev.order_service.event;
 
+import com.dev.commonlib_kafka.event.RefundRequestedEvent;
+import com.dev.commonlib_kafka.topic.KafkaTopics;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.sql.Timestamp;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 public class OrderEventPublisher {
 
     private final JdbcTemplate jdbcTemplate;
+    private final JsonMapper jsonMapper;
 
     public void recordCartItemAdded(CartItemAddedEvent event) {
         jdbcTemplate.update(
@@ -19,6 +24,17 @@ public class OrderEventPublisher {
                         "VALUES (?, ?, ?, ?, ?, ?)",
                 event.orderId(), event.buyerId(), event.eventId(),
                 event.itemCount(), event.quantity(), Timestamp.from(event.occurredAt())
+        );
+    }
+
+    // Event mới (P4) đi qua cột topic + payload JSON; cart.item_added giữ dạng cột riêng như cũ.
+    // Gọi trong transaction nghiệp vụ để yêu cầu hoàn và thay đổi trạng thái Order cùng commit.
+    public void recordRefundRequested(RefundRequestedEvent event, UUID eventId) {
+        jdbcTemplate.update(
+                "INSERT INTO order_event_outbox (order_id, buyer_id, event_id, occurred_at, topic, payload) " +
+                        "VALUES (?, ?, ?, ?, ?, ?)",
+                event.orderId(), event.buyerId(), eventId, Timestamp.from(event.requestedAt()),
+                KafkaTopics.ORDER_REFUND_REQUESTED, jsonMapper.writeValueAsString(event)
         );
     }
 }

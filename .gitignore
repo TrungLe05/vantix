@@ -45,3 +45,6 @@ skills-lock.json
 
 # k6: commit script/kết quả, chỉ chặn file env chứa tài khoản/mật khẩu test
 /backend/services/order-service/k6/.env*
+
+# graphify: knowledge graph sinh cục bộ (/graphify), không commit
+graphify-out/

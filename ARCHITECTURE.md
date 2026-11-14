@@ -42,8 +42,8 @@ Nét liền: đã có trong code. Nét đứt: thiết kế, chưa code.
 | api-gateway | 8999 | — | Entry point, verify JWT, inject `X-User-Id`/`X-User-Role`, CORS, routing | Có |
 | user-service | 9004 | `users_service` | Đăng ký, OTP email, login, refresh rotation, Google OAuth2, tạo STAFF | Có (P1) |
 | product-service | 9003 | `products_service` | Catalog: venue, event, seat map/seat, ticket type, giá gốc | Có (P2) |
-| order-service | 9001 | `orders_service` | Giỏ, hold, tồn kho giao dịch, availability; sau này vé/QR, check-in, % hoàn | Có (P3) |
-| payment-service | 9002 | `payments_service` | Stripe session, webhook, refund — chỉ biết tiền | Khung rỗng |
+| order-service | 9001 | `orders_service` | Giỏ, hold, tồn kho giao dịch, availability, nhận kết quả thanh toán, tính % hoàn; sau này vé/QR, check-in | Có (P3, P4) |
+| payment-service | 9002 | `payments_service` | Stripe Checkout session, webhook, refund — chỉ biết tiền | Có (P4, chưa chạy với Stripe thật) |
 | notification-service | 9000 | `notifications_service` | Consume Kafka, gửi email, WebSocket, bảng `notifications` | Khung rỗng |
 | bot-detection | 9005 | — | Isolation Forest chấm điểm `cart.item_added` | Chỉ `/health` |
 | assistant | 9006 | — | Trợ lý LLM, stateless | Chỉ `/health` |
@@ -101,8 +101,13 @@ Redis: `otp:{purpose}:{userId}`, `otp:cooldown:{purpose}:{userId}`, `oauth:code:
 | `user.staff-account-created` | user | notification (P5) | Như trên — payload có mật khẩu tạm, không log |
 | `product.event-cancelled` | product | order | Transactional outbox `event_outbox`, retry 5s |
 | `cart.item_added` | order | bot-detection (P6) | Transactional outbox `order_event_outbox`, retry 5s |
+| `order.refund-requested` | order | payment | Outbox `order_event_outbox` (cột `topic` + `payload`) |
+| `payment.succeeded`, `payment.failed` | payment | order | Outbox `payment_event_outbox` |
+| `refund.completed`, `refund.failed` | payment | order | Outbox `payment_event_outbox` |
 
 Key = id aggregate. Consumer phải idempotent vì outbox có thể phát lặp.
+
+Luồng tiền (P4, chi tiết `docs/payment/`): buyer gọi Order `POST /orders/{id}/checkout` → Order gọi Payment đồng bộ qua API nội bộ `/api/internal/payments/**` (không route ở Gateway) lấy link Stripe Checkout → Stripe gọi webhook `/api/payments/webhooks/stripe` (xác thực chữ ký, idempotent theo event id) → `payment.succeeded` → Order `PAID`. Tiền vào khi Order đã hết hạn/bị hủy thì hoàn 100%. Hoàn tiền: Order tính % và phát `order.refund-requested`, Payment thực thi qua Stripe.
 
 ## 7. Order — chống bán trùng (P3)
 

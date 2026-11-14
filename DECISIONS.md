@@ -29,7 +29,11 @@
 | D23 | Order: thứ tự khóa Order → Hold, khóa theo id, job expire `SKIP LOCKED` | Chốt |
 | D24 | Tối đa 10 vé mỗi Order (cấu hình được) | Chốt (chủ sản phẩm xác nhận 14/11/2026) |
 | D25 | Outbox: backoff lũy thừa, dead-letter sau 10 lần, gauge + log ERROR làm tín hiệu alert | Chốt |
-| D26 | OR08 (hủy giỏ) ở frontend: dùng cho CART, hoãn PENDING_PAYMENT tới P4 | Chốt (14/11/2026); PENDING_PAYMENT xem lại ở P4 |
+| D26 | OR08 (hủy giỏ) ở frontend: dùng cho CART, hoãn PENDING_PAYMENT tới P4 | Chốt (14/11/2026); phần PENDING_PAYMENT chốt ở D27 |
+| D27 | Stripe Checkout Session; hạn thanh toán = deadline hold, Payment tự expire phiên; OR08 chỉ cho CART | Chốt (P4) |
+| D28 | Thanh toán đến sau khi Order EXPIRED/CANCELLED → hoàn 100% tự động | Chốt (P4) |
+| D29 | Hoàn tiền bất đồng bộ qua Kafka, hoàn cả đơn, vé về kho ngay khi ghi nhận | Chốt (P4) |
+| D30 | API nội bộ Order → Payment dưới `/api/internal/**`, không route qua Gateway | Chốt (P4); cách ly mạng ở P9 |
 
 ---
 
@@ -121,3 +125,16 @@ Hiện trạng: `DELETE /api/orders/{id}` đã có và có test (hủy CART/PEND
 - **Rủi ro:** (1) Với PENDING_PAYMENT, sau P4 buyer có thể hủy trong lúc Stripe đang xử lý → thanh toán thành công cho Order đã hủy. (2) Vòng giữ–hủy nhanh có thể bị bot dùng để "xoay" tồn kho (P6 cần tín hiệu này; P9 rate limit).
 - **Khuyến nghị:** thêm nút "Hủy giỏ" (có hộp xác nhận) ở trang order detail **chỉ khi `status = CART`**; chưa hiển thị cho PENDING_PAYMENT. Khi thiết kế P4: hoặc giới hạn OR08 phía backend chỉ cho CART, hoặc bắt buộc hủy PaymentIntent thành công trước khi hủy Order (Payment xác nhận qua Kafka). Đưa sự kiện hủy giỏ vào feature P6 (`cart.cancelled` nếu cần).
 - **Đã chốt 14/11/2026**: nút "Cancel cart" (hộp xác nhận "Keep cart"/"Cancel cart") ở trang order detail, chỉ hiện khi `status = CART`, chưa hết hạn, event chưa hủy; E2E `buyer.spec.ts` kiểm tồn được nhả ngay và giỏ PENDING_PAYMENT không có nút. Backend OR08 vẫn nhận PENDING_PAYMENT — **việc của P4**: giới hạn chỉ CART hoặc hủy PaymentIntent trước.
+
+
+### D27 — Stripe Checkout Session và đồng bộ deadline
+Roadmap để ngỏ "PaymentIntent/Checkout Session". Chọn **Checkout Session** (trang do Stripe host): frontend chỉ cần chuyển hướng tới `url`, không thêm `@stripe/stripe-js`, không có dữ liệu thẻ đi qua hệ thống. Đánh đổi: Stripe không cho đặt hạn phiên dưới 30 phút trong khi hold là 10 phút. Xử lý: Order gửi `holdExpiresAt` khi tạo phiên; `PaymentExpirationScheduler` gọi Stripe expire phiên khi quá hạn và phát `payment.failed (EXPIRED)`; nếu Stripe báo phiên đã thanh toán thì ghi nhận thành công (cũng là lưới an toàn khi webhook thất lạc). Không đặt `expires_at` phía Stripe vì tham số phải giống hệt giữa các lần retry cùng idempotency key. **Không gia hạn hold khi confirm/checkout** (giữ D09); buyer xác nhận sát giờ mà trả không kịp được hoàn theo D28 — có cấp "cửa sổ thanh toán" riêng hay không vẫn là câu hỏi sản phẩm mở. Khởi tạo thanh toán idempotent theo `order_id` (UNIQUE + Stripe Idempotency-Key `checkout-{paymentId}`) thay cho Idempotency-Key của client: phủ được cả nhiều tab/thiết bị. Chốt nốt D26: **OR08 chỉ nhận CART**, `PENDING_PAYMENT` trả 4005 — buyer có thể đang trả tiền trên Stripe; bỏ thanh toán thì Order tự hết hạn (≤ 10 phút). Phương án "hủy phiên Stripe rồi mới hủy Order" bị loại vì thêm một vòng gọi đồng bộ mà D28 đã bao phủ rủi ro còn lại.
+
+### D28 — Thanh toán trễ thì hoàn tiền, không hồi sinh Order
+"Payment thành công đến sau deadline hold" (việc treo từ P3). Khi nhận `payment.succeeded`, Order khóa dòng và rẽ theo trạng thái: `PENDING_PAYMENT` → `PAID` (kể cả vừa quá deadline nhưng job chưa expire — hold vẫn còn nên không bán trùng); `EXPIRED`/`CANCELLED` → giữ nguyên, tạo refund `LATE_PAYMENT` 100% theo số tiền Payment báo đã thu; trạng thái đã thanh toán → bỏ qua (bản tin lặp). Loại phương án "giữ lại vé nếu còn trống": phải giữ lại đúng ghế/tồn trong khi người khác có thể đang giữ, phức tạp và dễ sai ngay ở lớp chống bán trùng. Order vẫn giữ TTL riêng (job 1 giây), không phụ thuộc tín hiệu của Payment (roadmap mục 2).
+
+### D29 — Hoàn tiền qua Kafka, hoàn cả đơn
+Roadmap để ngỏ sync/async cho Order → Payment khi hoàn. Chọn async: Order ghi `order_refunds` + outbox `order.refund-requested` trong cùng transaction đổi trạng thái; Payment consume, gọi Stripe (Idempotency-Key `refund-{refundId}`), phát `refund.completed`/`refund.failed`. Lý do: hai trong ba nguồn hoàn (hủy event, thanh toán trễ) phát sinh **bên trong consumer**, xử lý hàng loạt — gọi REST đồng bộ trong transaction đó là cascading failure; một đường duy nhất cho cả ba nguồn dễ kiểm chứng hơn. Phạm vi P4: **hoàn cả đơn**, `order_refunds.order_id` UNIQUE; hoàn từng vé để sau khi có vé/QR (P5). Vé trả về kho **ngay khi ghi nhận yêu cầu** (buyer đã từ bỏ vé; event hủy thì tồn kho không còn ý nghĩa) thay vì chờ `refund.completed` — nếu Stripe hoàn lỗi thì đó là việc đối soát tiền (`REFUND_FAILED`, Order giữ `REFUND_PENDING`), không giữ chết vé. Payment không tính %: chỉ kiểm tra tổng hoàn ≤ số đã thu. Mốc 0% (< 24 giờ) bị từ chối (4015) thay vì hủy đơn không hoàn tiền. Giới hạn: refund `FAILED` chưa có API xử lý lại; Stripe lỗi tạm thời được retry vô hạn mỗi 30 giây (tiền nợ buyer — bỏ cuộc âm thầm tệ hơn thử mãi).
+
+### D30 — API nội bộ giữa service
+PM01 (`/api/internal/payments/checkout-sessions`) chỉ dành cho order-service. Cân nhắc: (a) secret dùng chung giữa service — thêm một secret phải quản lý, mà mô hình hiện tại vốn đã tin mạng nội bộ (D03); (b) đặt dưới prefix không có route ở Gateway + chuyển tiếp `X-User-Id`/`X-User-Role` để Payment vẫn kiểm tra `buyerId` khớp danh tính — chọn (b). Giới hạn giống mọi service khác: ở dev cổng 9002 truy cập trực tiếp được; network isolation ở P9 mới thật sự đóng lại. Quy ước từ nay: API chỉ cho service gọi đặt dưới `/internal/**`, không thêm vào `routes`/`public-endpoints` của Gateway.

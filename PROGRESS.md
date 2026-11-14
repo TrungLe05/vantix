@@ -1,6 +1,6 @@
 # Vantix — Tiến độ
 
-> Cập nhật: 13/11/2026 · nhánh `feature/order-service` (commit gần nhất `cd9184d`). Trạng thái lấy từ code, không chỉ từ docs.
+> Cập nhật: 14/11/2026 · nhánh `feature/payment-service` (P4). Trạng thái lấy từ code, không chỉ từ docs.
 
 ## Tổng quan
 
@@ -10,7 +10,7 @@
 | P1 | User & Auth | ✅ Xong | 14 API, manual test; chưa có test tự động |
 | P2 | Product (catalog) | ✅ Xong phần API | 14 API (PR01–PR14); thiếu test, bootstrap DB |
 | P3 | Order: giỏ, hold, chống bán trùng | ✅ Xong | 9 API + UI (có hủy giỏ CART); integration/concurrency test, E2E Playwright, k6 (đúng đắn đạt, thông lượng/event còn thấp) |
-| P4 | Payment (Stripe) | ⬜ Chưa bắt đầu | payment-service là khung rỗng |
+| P4 | Payment (Stripe) | 🟡 Đã code + integration test | Stripe Checkout, webhook, hoàn tiền, UI; chưa chạy với Stripe thật, chưa có E2E |
 | P5 | Notification & check-in | ⬜ Chưa bắt đầu | notification-service khung rỗng → email OTP/STAFF chưa thực sự gửi |
 | P6 | Bot-detection | ⬜ Chưa bắt đầu | Chỉ `/health`; topic `cart.item_added` đã có producer |
 | P7 | AI Assistant | ⬜ Chưa bắt đầu | Chỉ `/health` |
@@ -43,6 +43,14 @@
 - Test: `OrderRequestHasherTest` (unit duy nhất của toàn repo).
 - Frontend: Continue tạo hold từ event detail/seat map, trang orders (list) và order detail (countdown, sửa GA, bỏ item, confirm), không giả lập payment.
 
+### P4 — Payment
+- payment-service: `POST /internal/payments/checkout-sessions` (nội bộ, Order gọi), `POST /payments/webhooks/stripe` (công khai, xác thực chữ ký), consumer `order.refund-requested`, outbox `payment_event_outbox`, scheduler expire phiên theo deadline hold và retry refund. Stripe sau interface `StripeGateway` (stripe-java 34.1.0).
+- order-service: OR09 checkout, OR10 refund-quote, OR11 refund; consumer `payment.succeeded`/`payment.failed`/`refund.completed`/`refund.failed`; trạng thái `REFUND_PENDING`/`REFUNDED`, bảng `order_refunds` (migration V3); OR08 chỉ còn cho CART; hủy event hoàn 100% đơn đã thanh toán.
+- Gateway: webhook Stripe vào `public-endpoints`.
+- Frontend: nút "Pay" (chuyển hướng Stripe Checkout), chờ xác nhận sau khi quay về, hộp thoại hoàn tiền có xem trước số tiền, mục Purchases ở trang orders.
+- Test: payment 19 case, order thêm 20 case (15 thanh toán/hoàn, 4 chính sách, 1 outbox); tổng order 75.
+- Quyết định mới D27–D30 (`DECISIONS.md`).
+
 ## Đồng bộ tài liệu (13/11/2026)
 
 Đã đối chiếu docs API với code và sửa các điểm lệch:
@@ -57,8 +65,9 @@
 
 ## Rủi ro / nợ kỹ thuật
 
-- Đã có ~100 test tự động (unit + integration trên Postgres/Redis thật, CI dùng service container); chưa có E2E xuyên service.
-- Chưa chứng minh bằng số liệu tải chống bán trùng (k6 sẵn script, chưa có kết quả — P3-B BLOCKED); hiện chỉ có bằng chứng từ integration test song song.
+- ~140 test tự động backend (unit + integration trên Postgres/Redis thật, CI dùng service container); E2E Playwright cho P1–P3, chưa có cho thanh toán.
+- P4 chưa chạy với Stripe thật: lớp gọi SDK (`StripeSdkGateway`) mới được biên dịch, logic được test với Stripe giả lập.
+- Refund `FAILED` phải xử lý tay (log `REFUND_FAILED`); chưa có API quản trị.
 - Outbox Product/Order đã có backoff + dead-letter + gauge (D25), chưa có rule alert (P9); user-service vẫn có thể mất event Kafka (không dùng outbox).
 - Đã gỡ log nhạy cảm (fingerprint JWT secret, message DB chứa giá trị vi phạm, message JJWT, message lỗi OAuth2); secret có thể đã xuất hiện trong log dev cũ.
 - Cổng service còn truy cập trực tiếp được ở dev (Trust-The-Gateway cần network isolation ở P9).

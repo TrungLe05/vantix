@@ -21,5 +21,7 @@ public class OrderResponse {
     private Instant paidAt;
     // null nếu Order chưa từng có yêu cầu hoàn tiền
     private RefundResponse refund;
+    // P5: vé đã phát hành (rỗng khi chưa thanh toán)
+    private List<TicketResponse> tickets;
     private List<OrderItemResponse> items;
 }

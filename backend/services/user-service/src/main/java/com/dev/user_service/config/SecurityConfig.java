@@ -9,6 +9,7 @@ import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -21,6 +22,9 @@ import org.springframework.web.client.RestClient;
 import java.time.Duration;
 
 @Configuration
+// Bật @PreAuthorize (P5): trước đây chưa bật nên @PreAuthorize trên POST /users/staff không có tác dụng —
+// vẫn an toàn nhờ rule URL hasRole("ADMIN") bên dưới. API nội bộ /internal/** dựa hoàn toàn vào annotation.
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 

@@ -1,6 +1,6 @@
 # Vantix — Tiến độ
 
-> Cập nhật: 14/11/2026 · nhánh `feature/payment-service` (P4). Trạng thái lấy từ code, không chỉ từ docs.
+> Cập nhật: 14/11/2026 · nhánh `feature/notification-checkin` (P5, tách từ `feature/payment-service`). Trạng thái lấy từ code, không chỉ từ docs.
 
 ## Tổng quan
 
@@ -11,7 +11,7 @@
 | P2 | Product (catalog) | ✅ Xong phần API | 14 API (PR01–PR14); thiếu test, bootstrap DB |
 | P3 | Order: giỏ, hold, chống bán trùng | ✅ Xong | 9 API + UI (có hủy giỏ CART); integration/concurrency test, E2E Playwright, k6 (đúng đắn đạt, thông lượng/event còn thấp) |
 | P4 | Payment (Stripe) | 🟡 Đã code + integration test | Stripe Checkout, webhook, hoàn tiền, UI; chưa chạy với Stripe thật, chưa có E2E |
-| P5 | Notification & check-in | ⬜ Chưa bắt đầu | notification-service khung rỗng → email OTP/STAFF chưa thực sự gửi |
+| P5 | Notification & check-in | 🟡 Đã code + integration test | Vé/QR, check-in chống quét trùng, thông báo + email + WebSocket, email OTP/STAFF; chưa chạy E2E với Kafka/SMTP thật |
 | P6 | Bot-detection | ⬜ Chưa bắt đầu | Chỉ `/health`; topic `cart.item_added` đã có producer |
 | P7 | AI Assistant | ⬜ Chưa bắt đầu | Chỉ `/health` |
 | P8 | Dữ liệu cá nhân | ⬜ Chưa bắt đầu | |
@@ -51,6 +51,15 @@
 - Test: payment 19 case, order thêm 20 case (15 thanh toán/hoàn, 4 chính sách, 1 outbox); tổng order 75.
 - Quyết định mới D27–D30 (`DECISIONS.md`).
 
+### P5 — Notification & check-in
+- order-service: bảng `tickets` (migration V4), phát hành vé cùng transaction `payment.succeeded` (→ `TICKETS_ISSUED`), OR12 ảnh QR (zxing), OR13 check-in ADMIN/STAFF (update nguyên tử, quét trùng 4017 + ai/lúc nào), hoàn tiền làm vé `VOID`, chặn hoàn đơn đã có vé check-in; outbox `order.tickets-issued`, `order.refunded`.
+- notification-service (trước là khung rỗng): consumer `order.tickets-issued`/`order.refund-requested`/`order.refunded` → bảng `notifications` (idempotent theo `dedup_key`) + đẩy WebSocket + email qua scheduler có retry; consumer `user.*` gửi email OTP/mật khẩu tạm (không lưu, không log); API NT01–NT05; WebSocket `/api/notifications/ws` với ticket một lần.
+- user-service: `GET /internal/users/{id}/contact` (role INTERNAL); bật `@EnableMethodSecurity`.
+- Gateway: `GET /api/notifications/ws` vào `public-endpoints`.
+- Frontend: mục "Your tickets" (QR + mã), chuông thông báo realtime có badge, trang `/check-in` (camera `BarcodeDetector` hoặc nhập mã).
+- Test: order 84 (thêm 9 vé/check-in), notification 14, user 18 (thêm 3).
+- Quyết định mới D31–D36 (`DECISIONS.md`).
+
 ## Đồng bộ tài liệu (13/11/2026)
 
 Đã đối chiếu docs API với code và sửa các điểm lệch:
@@ -68,6 +77,8 @@
 - ~140 test tự động backend (unit + integration trên Postgres/Redis thật, CI dùng service container); E2E Playwright cho P1–P3, chưa có cho thanh toán.
 - P4 chưa chạy với Stripe thật: lớp gọi SDK (`StripeSdkGateway`) mới được biên dịch, logic được test với Stripe giả lập.
 - Refund `FAILED` phải xử lý tay (log `REFUND_FAILED`); chưa có API quản trị.
+- P5 chưa chạy end-to-end (Kafka + SMTP thật, WebSocket qua Gateway, camera trên thiết bị thật). Dev không có SMTP thì email OTP bị bỏ qua (`EMAIL_SKIPPED`), cần cấu hình `MAIL_HOST` để đăng ký tài khoản mới.
+- Phiên WebSocket và ticket nằm trong bộ nhớ notification-service: chỉ đúng với một instance (P9).
 - Outbox Product/Order đã có backoff + dead-letter + gauge (D25), chưa có rule alert (P9); user-service vẫn có thể mất event Kafka (không dùng outbox).
 - Đã gỡ log nhạy cảm (fingerprint JWT secret, message DB chứa giá trị vi phạm, message JJWT, message lỗi OAuth2); secret có thể đã xuất hiện trong log dev cũ.
 - Cổng service còn truy cập trực tiếp được ở dev (Trust-The-Gateway cần network isolation ở P9).

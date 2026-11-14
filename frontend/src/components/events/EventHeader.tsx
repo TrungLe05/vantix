@@ -2,10 +2,31 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, Clock3, LayoutDashboard, ShoppingBag, UserRound, X } from "lucide-react";
+import {
+  Bell,
+  CheckCheck,
+  Clock3,
+  LayoutDashboard,
+  ScanLine,
+  ShoppingBag,
+  UserRound,
+  X,
+} from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getOrders } from "@/lib/api/orders";
+import {
+  getNotifications,
+  getUnreadNotificationCount,
+  markAllNotificationsRead,
+  markNotificationRead,
+  openNotificationSocket,
+} from "@/lib/api/notifications";
+
+const notificationTime = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 export function EventHeader({ showSignUp = false }: { showSignUp?: boolean }) {
   const user = useAuthStore((state) => state.user);
@@ -17,6 +38,81 @@ export function EventHeader({ showSignUp = false }: { showSignUp?: boolean }) {
     enabled: drawer === "cart",
     refetchInterval: drawer === "cart" ? 15_000 : false,
   });
+
+  const queryClient = useQueryClient();
+  const isBuyer = user?.role === "BUYER";
+  const unreadQuery = useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: getUnreadNotificationCount,
+    enabled: isBuyer,
+    // Lưới an toàn khi WebSocket rớt: vẫn cập nhật badge sau tối đa 1 phút
+    refetchInterval: 60_000,
+  });
+  const notificationsQuery = useQuery({
+    queryKey: ["notifications", "list"],
+    queryFn: () => getNotifications(0, 30),
+    enabled: isBuyer && drawer === "notifications",
+  });
+  const refreshNotifications = () =>
+    queryClient.invalidateQueries({ queryKey: ["notifications"] });
+  const markReadMutation = useMutation({
+    mutationFn: markNotificationRead,
+    onSuccess: refreshNotifications,
+  });
+  const markAllMutation = useMutation({
+    mutationFn: markAllNotificationsRead,
+    onSuccess: refreshNotifications,
+  });
+
+  // Kênh realtime cho buyer: nhận thông báo mới thì làm mới badge/danh sách và cả đơn hàng liên quan
+  // (vé vừa phát hành hiện ngay trên trang order mà không chờ refetch định kỳ). Rớt kết nối thì nối lại
+  // với độ trễ tăng dần; mỗi lần nối lấy ticket mới vì ticket chỉ dùng một lần.
+  useEffect(() => {
+    if (!isBuyer) return;
+    let socket: WebSocket | null = null;
+    let retryTimer: number | undefined;
+    let attempt = 0;
+    let stopped = false;
+    const connect = async () => {
+      try {
+        socket = await openNotificationSocket(({ notification }) => {
+          void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+          if (notification.orderId) {
+            void queryClient.invalidateQueries({
+              queryKey: ["order", notification.orderId],
+            });
+            void queryClient.invalidateQueries({ queryKey: ["orders"] });
+          }
+        });
+        if (stopped) {
+          socket.close();
+          return;
+        }
+        socket.addEventListener("open", () => {
+          attempt = 0;
+        });
+        socket.addEventListener("close", scheduleReconnect);
+      } catch {
+        scheduleReconnect();
+      }
+    };
+    const scheduleReconnect = () => {
+      if (stopped) return;
+      attempt += 1;
+      retryTimer = window.setTimeout(
+        () => void connect(),
+        Math.min(30_000, 1_000 * 2 ** attempt),
+      );
+    };
+    void connect();
+    return () => {
+      stopped = true;
+      window.clearTimeout(retryTimer);
+      socket?.close();
+    };
+  }, [isBuyer, queryClient]);
+
+  const unreadCount = unreadQuery.data ?? 0;
 
   useEffect(() => {
     if (drawer !== "cart") return;
@@ -55,6 +151,15 @@ export function EventHeader({ showSignUp = false }: { showSignUp?: boolean }) {
         </div>
         {user ? (
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            {user.role === "ADMIN" || user.role === "STAFF" ? (
+              <Link
+                href="/check-in"
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 text-sm font-medium transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ScanLine aria-hidden="true" className="size-4 text-primary" />
+                <span>Check-in</span>
+              </Link>
+            ) : null}
             {user.role === "ADMIN" ? (
               <Link
                 href="/admin/events"
@@ -81,11 +186,23 @@ export function EventHeader({ showSignUp = false }: { showSignUp?: boolean }) {
                 <button
                   type="button"
                   onClick={() => setDrawer("notifications")}
-                  aria-label="Open notifications"
+                  aria-label={
+                    unreadCount > 0
+                      ? `Open notifications, ${unreadCount} unread`
+                      : "Open notifications"
+                  }
                   title="Notifications"
-                  className="inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="relative inline-flex size-10 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <Bell aria-hidden="true" className="size-5" />
+                  {unreadCount > 0 ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute right-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold leading-4 text-primary-foreground"
+                    >
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  ) : null}
                 </button>
               </>
             ) : null}
@@ -254,12 +371,87 @@ export function EventHeader({ showSignUp = false }: { showSignUp?: boolean }) {
                 </Link>
               </div>
             ) : (
-              <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
-                <Bell aria-hidden="true" className="size-7 text-muted-foreground" />
-                <p className="mt-3 text-sm font-semibold">No notifications</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  You’re all caught up.
-                </p>
+              <div className="flex min-h-0 flex-1 flex-col p-6">
+                {unreadCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => markAllMutation.mutate()}
+                    disabled={markAllMutation.isPending}
+                    className="inline-flex min-h-9 items-center gap-2 self-end rounded-lg px-3 text-sm font-semibold text-primary hover:bg-muted disabled:opacity-50"
+                  >
+                    <CheckCheck aria-hidden="true" className="size-4" />
+                    Mark all as read
+                  </button>
+                ) : null}
+                {notificationsQuery.isPending ? (
+                  <div
+                    role="status"
+                    aria-label="Loading notifications"
+                    className="mt-4 space-y-3"
+                  >
+                    <div className="h-20 animate-pulse rounded-xl bg-muted" />
+                    <div className="h-20 animate-pulse rounded-xl bg-muted" />
+                  </div>
+                ) : null}
+                {notificationsQuery.isError ? (
+                  <p
+                    role="alert"
+                    className="mt-4 rounded-xl border border-destructive/30 p-4 text-sm text-muted-foreground"
+                  >
+                    Could not load your notifications. Close this panel and try
+                    again.
+                  </p>
+                ) : null}
+                {notificationsQuery.data?.length === 0 ? (
+                  <div className="flex flex-1 flex-col items-center justify-center text-center">
+                    <Bell
+                      aria-hidden="true"
+                      className="size-7 text-muted-foreground"
+                    />
+                    <p className="mt-3 text-sm font-semibold">
+                      No notifications
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      You’re all caught up.
+                    </p>
+                  </div>
+                ) : null}
+                <ul className="mt-3 space-y-3 overflow-y-auto">
+                  {notificationsQuery.data?.map((notification) => (
+                    <li key={notification.id}>
+                      <Link
+                        href={notification.link ?? "/orders"}
+                        onClick={() => {
+                          if (!notification.read)
+                            markReadMutation.mutate(notification.id);
+                          setDrawer(null);
+                        }}
+                        className={`block rounded-xl border p-4 transition hover:border-primary/40 hover:bg-muted/40 ${notification.read ? "border-border bg-card" : "border-primary/30 bg-accent"}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="font-semibold">
+                            {notification.title}
+                          </h3>
+                          {notification.read ? null : (
+                            <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary">
+                              <span className="sr-only">Unread</span>
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {notification.body}
+                        </p>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          <time dateTime={notification.createdAt}>
+                            {notificationTime.format(
+                              new Date(notification.createdAt),
+                            )}
+                          </time>
+                        </p>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </aside>

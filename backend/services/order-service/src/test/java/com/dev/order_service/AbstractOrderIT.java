@@ -58,6 +58,8 @@ public abstract class AbstractOrderIT {
     protected UUID seatedTypeId;
     protected UUID gaTypeId;
     protected List<UUID> seatIds;
+    // Mặc định còn 30 ngày tới sự kiện (mốc hoàn 100%); test hoàn tiền đổi rồi gọi lại catalog()
+    protected Instant eventStartAt = Instant.now().plus(30, ChronoUnit.DAYS);
 
     @BeforeEach
     void newCatalog() {
@@ -78,7 +80,7 @@ public abstract class AbstractOrderIT {
                     "ACTIVE", new ProductCatalog.TicketBrief(seatedTypeId, "VIP", SEAT_PRICE)));
         }
         when(productCatalogClient.getEvent(eventId)).thenReturn(new ProductCatalog(eventId, "PUBLISHED",
-                Instant.now().minus(1, ChronoUnit.DAYS), Instant.now().plus(1, ChronoUnit.DAYS), true,
+                eventStartAt, Instant.now().minus(1, ChronoUnit.DAYS), Instant.now().plus(1, ChronoUnit.DAYS), true,
                 List.of(new ProductCatalog.TicketType(seatedTypeId, "SEATED", "VIP", SEAT_PRICE, seats),
                         new ProductCatalog.TicketType(gaTypeId, "GENERAL_ADMISSION", "GA", GA_PRICE, gaCapacity))));
         when(productCatalogClient.getSeatMap(eventId))

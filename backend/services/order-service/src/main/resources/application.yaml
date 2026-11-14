@@ -34,9 +34,15 @@ spring:
           product-service:
             connectTimeout: 2000
             readTimeout: 3000
+          # Payment gọi Stripe bên trong request này nên cần thời gian đọc dài hơn
+          payment-service:
+            connectTimeout: 2000
+            readTimeout: 12000
 app:
   product-service:
     base-url: ${PRODUCT_SERVICE_URL:http://localhost:9003/api}
+  payment-service:
+    base-url: ${PAYMENT_SERVICE_URL:http://localhost:9002/api}
   order:
     hold-duration: PT10M
     # Tổng vé (ghế + GA) tối đa mỗi Order, xem D24

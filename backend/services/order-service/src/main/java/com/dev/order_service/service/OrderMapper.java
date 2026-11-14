@@ -2,10 +2,12 @@ package com.dev.order_service.service;
 
 import com.dev.order_service.dto.response.OrderItemResponse;
 import com.dev.order_service.dto.response.OrderResponse;
+import com.dev.order_service.dto.response.RefundResponse;
 import com.dev.order_service.entity.Order;
 import com.dev.order_service.entity.OrderItem;
 import com.dev.order_service.enums.OrderStatus;
 import com.dev.order_service.repository.OrderItemRepository;
+import com.dev.order_service.repository.OrderRefundRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -16,6 +18,7 @@ import java.util.List;
 public class OrderMapper {
 
     private final OrderItemRepository orderItemRepository;
+    private final OrderRefundRepository orderRefundRepository;
 
     public OrderResponse toResponse(Order order) {
         List<OrderItem> allItems = orderItemRepository.findByOrderIdOrderByCreatedAtAsc(order.getId());
@@ -42,8 +45,27 @@ public class OrderMapper {
                 .currency(order.getCurrency())
                 .totalAmount(order.getTotalAmount())
                 .holdExpiresAt(order.getHoldExpiresAt())
+                .paidAt(order.getPaidAt())
+                .refund(toRefundResponse(order))
                 .items(items)
                 .build();
+    }
+
+    private RefundResponse toRefundResponse(Order order) {
+        // Giỏ chưa thanh toán không thể có refund: bỏ một truy vấn cho đường đọc nóng nhất
+        if (isActiveCart(order)) {
+            return null;
+        }
+        return orderRefundRepository.findByOrderId(order.getId())
+                .map(refund -> RefundResponse.builder()
+                        .status(refund.getStatus())
+                        .reason(refund.getReason())
+                        .percent(refund.getRefundPercent())
+                        .amount(refund.getAmount())
+                        .requestedAt(refund.getCreatedAt())
+                        .completedAt(refund.getCompletedAt())
+                        .build())
+                .orElse(null);
     }
 
     public List<OrderResponse> toResponses(List<Order> orders) {

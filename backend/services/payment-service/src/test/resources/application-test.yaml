@@ -1,0 +1,23 @@
+# Profile integration test (D21): PostgreSQL thật, DB riêng payments_service_test
+# (docker/postgres/test/create-test-databases.sql). Stripe thay bằng mock (StripeGateway), không gọi mạng.
+spring:
+  datasource:
+    url: jdbc:postgresql://${IT_DB_HOST:localhost}:${IT_DB_PORT:5432}/payments_service_test
+    username: ${IT_DB_USER:vantix_test}
+    password: ${IT_DB_PASSWORD:vantix_test}
+  # Không trỏ vào Kafka dev; consumer gọi trực tiếp trong test nên tắt listener container
+  kafka:
+    bootstrap-servers: localhost:1
+    listener:
+      auto-startup: false
+app:
+  payment:
+    frontend-base-url: http://localhost:3000
+    # Test gọi thẳng các scheduler; không để lần chạy nền đua với test
+    outbox-initial-delay-ms: 3600000
+    outbox-poll-interval-ms: 3600000
+    expiration-initial-delay-ms: 3600000
+    expiration-poll-interval-ms: 3600000
+    refund-retry-initial-delay-ms: 3600000
+    refund-retry-interval-ms: 3600000
+    refund-retry-min-age: PT0S

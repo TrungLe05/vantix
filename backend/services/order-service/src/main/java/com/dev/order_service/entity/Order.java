@@ -58,6 +58,8 @@ public class Order {
 
     private Instant holdExpiresAt;
 
+    private Instant paidAt;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

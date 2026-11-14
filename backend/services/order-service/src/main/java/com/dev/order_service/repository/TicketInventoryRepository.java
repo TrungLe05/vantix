@@ -70,6 +70,19 @@ public interface TicketInventoryRepository extends JpaRepository<TicketInventory
             @Param("now") java.time.Instant now
     );
 
+    // Hoàn vé đã bán: trả số lượng từ sold về khả dụng
+    @Modifying(flushAutomatically = true)
+    @Query("""
+            update TicketInventory i
+            set i.soldQuantity = i.soldQuantity - :quantity, i.updatedAt = :now
+            where i.ticketTypeId = :ticketTypeId and i.soldQuantity >= :quantity
+            """)
+    int releaseSold(
+            @Param("ticketTypeId") UUID ticketTypeId,
+            @Param("quantity") int quantity,
+            @Param("now") java.time.Instant now
+    );
+
     List<TicketInventory> findByEventId(UUID eventId);
 }
 

@@ -81,6 +81,8 @@ app:
       - GET /api/events/*
       - GET /api/events/*/seat-map
       - GET /api/orders/events/*/availability
+      # Stripe gọi webhook không có JWT; payment-service xác thực bằng chữ ký Stripe-Signature
+      - POST /api/payments/webhooks/stripe
     password-change-allowlist:
       - PATCH /api/auth/change-password
       - POST /api/auth/logout

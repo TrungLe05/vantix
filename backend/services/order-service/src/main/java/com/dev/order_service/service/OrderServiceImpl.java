@@ -2,10 +2,14 @@ package com.dev.order_service.service;
 
 import com.dev.commonlib_api_response.exception.AppException;
 import com.dev.commonlib_api_response.exception.CommonErrorCode;
+import com.dev.order_service.client.PaymentClient;
+import com.dev.order_service.client.PaymentFeignClient;
 import com.dev.order_service.dto.request.AddOrderItemsRequest;
 import com.dev.order_service.dto.request.CreateOrderRequest;
 import com.dev.order_service.dto.request.OrderItemRequest;
 import com.dev.order_service.dto.response.AvailabilityResponse;
+import com.dev.order_service.dto.response.CheckoutResponse;
+import com.dev.order_service.dto.response.RefundQuoteResponse;
 import com.dev.order_service.dto.response.OrderResponse;
 import com.dev.order_service.dto.response.PageResponse;
 import com.dev.order_service.dto.response.ValidatedCatalog;
@@ -16,6 +20,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -27,6 +33,10 @@ public class OrderServiceImpl implements OrderService {
     private final CatalogValidationService catalogValidationService;
     private final OrderCommandService orderCommandService;
     private final OrderRequestHasher requestHasher;
+    private final PaymentClient paymentClient;
+
+    // Stripe không nhận khoản USD dưới 0.50; đơn 0 đồng (vé miễn phí) chưa hỗ trợ ở P4
+    private static final BigDecimal MIN_PAYABLE_AMOUNT = new BigDecimal("0.50");
 
     @Override
     public OrderResponse create(UUID buyerId, CreateOrderRequest request, String idempotencyKey) {
@@ -185,6 +195,78 @@ public class OrderServiceImpl implements OrderService {
             orderCommandService.cancelUnpaidOrdersForEvent(eventId);
         }
         return orderCommandService.getAvailability(eventId, catalog);
+    }
+
+    /**
+     * OR09 — lấy link thanh toán cho Order PENDING_PAYMENT. Không ghi gì ở DB Order và không cần
+     * Idempotency-Key: Payment idempotent theo orderId (một Order chỉ có một phiên thanh toán),
+     * gọi lại nhận đúng link cũ.
+     */
+    @Override
+    public CheckoutResponse checkout(UUID buyerId, UUID orderId) {
+        // getOwned expire Order nếu đã quá deadline hold
+        OrderResponse current = orderCommandService.getOwned(buyerId, orderId);
+        if (current.getStatus() == OrderStatus.EXPIRED) {
+            throw new AppException(OrderErrorCode.HOLD_EXPIRED);
+        }
+        if (current.getStatus() != OrderStatus.PENDING_PAYMENT) {
+            throw new AppException(OrderErrorCode.ORDER_STATE_CONFLICT);
+        }
+        if (current.getTotalAmount().compareTo(MIN_PAYABLE_AMOUNT) < 0) {
+            throw new AppException(OrderErrorCode.ORDER_NOT_PAYABLE);
+        }
+        // Deadline thanh toán = deadline hold: quá mốc này Payment tự expire phiên Stripe
+        PaymentFeignClient.CheckoutSession session = paymentClient.createCheckoutSession(
+                orderId, buyerId, current.getTotalAmount(), current.getCurrency(), current.getHoldExpiresAt()
+        );
+        return CheckoutResponse.builder()
+                .orderId(orderId)
+                .checkoutUrl(session.checkoutUrl())
+                .expiresAt(current.getHoldExpiresAt())
+                .build();
+    }
+
+    @Override
+    public RefundQuoteResponse getRefundQuote(UUID buyerId, UUID orderId) {
+        OrderResponse current = orderCommandService.getOwned(buyerId, orderId);
+        Instant eventStartAt = null;
+        int percent = 0;
+        if (isPaid(current)) {
+            eventStartAt = catalogValidationService.eventStartAt(current.getEventId());
+            percent = RefundPolicy.percent(Instant.now(), eventStartAt);
+        }
+        return RefundQuoteResponse.builder()
+                .orderId(orderId)
+                .refundable(percent > 0)
+                .percent(percent)
+                .amount(RefundPolicy.amount(current.getTotalAmount(), percent))
+                .currency(current.getCurrency())
+                .paidAmount(current.getTotalAmount())
+                .eventStartAt(eventStartAt)
+                .build();
+    }
+
+    @Override
+    public OrderResponse requestRefund(UUID buyerId, UUID orderId) {
+        OrderResponse current = orderCommandService.getOwned(buyerId, orderId);
+        // Bấm lại sau khi đã yêu cầu: trả trạng thái hiện tại, không báo lỗi
+        if (current.getStatus() == OrderStatus.REFUND_PENDING || current.getStatus() == OrderStatus.REFUNDED) {
+            return current;
+        }
+        if (!isPaid(current)) {
+            throw new AppException(OrderErrorCode.REFUND_NOT_ALLOWED);
+        }
+        // % tính lại ở server tại thời điểm yêu cầu, không tin số từ client/quote cũ
+        int percent = RefundPolicy.percent(
+                Instant.now(), catalogValidationService.eventStartAt(current.getEventId()));
+        if (percent <= 0) {
+            throw new AppException(OrderErrorCode.REFUND_NOT_ALLOWED);
+        }
+        return orderCommandService.requestRefund(buyerId, orderId, percent);
+    }
+
+    private boolean isPaid(OrderResponse order) {
+        return order.getStatus() == OrderStatus.PAID || order.getStatus() == OrderStatus.TICKETS_ISSUED;
     }
 
     private void requireIdempotencyKey(String idempotencyKey) {

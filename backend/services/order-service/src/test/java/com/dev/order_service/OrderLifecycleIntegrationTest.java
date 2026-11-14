@@ -151,7 +151,6 @@ class OrderLifecycleIntegrationTest extends AbstractOrderIT {
     void cancelReleasesHoldsAndIsIdempotent() {
         UUID buyer = UUID.randomUUID();
         OrderResponse cart = createCart(buyer, key(), seat(0), ga(2));
-        orderService.confirm(buyer, cart.getId(), key());
 
         assertThat(orderService.cancel(buyer, cart.getId()).getStatus()).isEqualTo(OrderStatus.CANCELLED);
         assertThat(orderService.cancel(buyer, cart.getId()).getStatus()).isEqualTo(OrderStatus.CANCELLED);

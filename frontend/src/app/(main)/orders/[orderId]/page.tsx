@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -9,11 +9,13 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock3,
+  CreditCard,
   LoaderCircle,
   Minus,
   Plus,
   Ticket,
   Trash2,
+  Undo2,
 } from "lucide-react";
 import {
   EventDate,
@@ -34,7 +36,10 @@ import {
   confirmOrder,
   getAvailability,
   getOrder,
+  getRefundQuote,
   removeOrderItem,
+  requestRefund,
+  startCheckout,
   updateOrderItemQuantity,
 } from "@/lib/api/orders";
 import { getErrorMessage } from "@/lib/api/client";
@@ -130,16 +135,54 @@ export default function OrderCartPage() {
       await updateOrder(next);
     },
   });
+  // Stripe đưa buyer về /orders/{id}?payment=success|cancelled. Kết quả thật đến qua webhook →
+  // Kafka → Order, nên tham số này chỉ để chọn thông báo và tăng nhịp refetch, không phải bằng chứng đã trả tiền.
+  const paymentParam = useSearchParams().get("payment");
+  const paymentReturn =
+    paymentParam === "success" || paymentParam === "cancelled"
+      ? paymentParam
+      : null;
+  const checkoutMutation = useMutation({
+    mutationFn: () => startCheckout(orderId),
+    // Rời trang sang Stripe Checkout; nút giữ trạng thái loading cho tới khi trình duyệt chuyển trang
+    onSuccess: (session) => window.location.assign(session.checkoutUrl),
+  });
+  const [isRefundDialogOpen, setRefundDialogOpen] = useState(false);
+  const refundQuoteQuery = useQuery({
+    queryKey: ["refund-quote", orderId],
+    queryFn: () => getRefundQuote(orderId),
+    enabled: isRefundDialogOpen,
+    // Mốc % đổi theo thời gian: luôn lấy lại khi mở hộp thoại
+    staleTime: 0,
+    gcTime: 0,
+  });
+  const refundMutation = useMutation({
+    mutationFn: () => requestRefund(orderId),
+    onSuccess: async (next) => {
+      setRefundDialogOpen(false);
+      await updateOrder(next);
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
   const orderQuery = useQuery({
     queryKey: ["order", orderId],
     queryFn: () => getOrder(orderId),
-    refetchInterval:
-      removeMutation.isPending ||
-      quantityMutation.isPending ||
-      confirmMutation.isPending ||
-      cancelMutation.isPending
-        ? false
-        : 15_000,
+    refetchInterval: (query) => {
+      if (
+        removeMutation.isPending ||
+        quantityMutation.isPending ||
+        confirmMutation.isPending ||
+        cancelMutation.isPending ||
+        refundMutation.isPending
+      )
+        return false;
+      const status = query.state.data?.status;
+      // Chờ webhook xác nhận thanh toán hoặc chờ Payment hoàn tiền: hỏi lại nhanh hơn
+      if (paymentReturn === "success" && status === "PENDING_PAYMENT")
+        return 2_000;
+      if (status === "REFUND_PENDING") return 5_000;
+      return 15_000;
+    },
   });
   const order = orderQuery.data;
   const eventQuery = useQuery({
@@ -165,21 +208,39 @@ export default function OrderCartPage() {
     ? Math.max(0, new Date(order.holdExpiresAt).getTime() - now)
     : 0;
   const isCart = order?.status === "CART";
+  const isPendingPayment = order?.status === "PENDING_PAYMENT";
+  const isPaid = order?.status === "PAID" || order?.status === "TICKETS_ISSUED";
+  const isRefund =
+    order?.status === "REFUND_PENDING" || order?.status === "REFUNDED";
+  const refund = order?.refund ?? null;
+  // Deadline hold cũng là hạn thanh toán: quá hạn thì Order bị expire ở lần đọc kế tiếp
   const expired =
-    order?.status === "EXPIRED" || (isCart && now > 0 && remaining === 0);
+    order?.status === "EXPIRED" ||
+    ((isCart || isPendingPayment) && now > 0 && remaining === 0);
+  // Đơn đã trả tiền của event bị hủy đi theo luồng hoàn tiền, không dùng thông báo "holds released"
   const cancelled =
-    order?.status === "CANCELLED" || eventQuery.data?.status === "CANCELLED";
+    !isPaid &&
+    !isRefund &&
+    (order?.status === "CANCELLED" || eventQuery.data?.status === "CANCELLED");
+  const awaitingPaymentResult =
+    isPendingPayment && paymentReturn === "success" && !expired;
   const hours = Math.floor(remaining / 3_600_000);
   const minutes = Math.floor((remaining % 3_600_000) / 60_000);
   const seconds = Math.floor((remaining % 60_000) / 1000);
-  const items = order?.items.filter((item) => item.status === "ACTIVE") ?? [];
+  // Đơn đang/đã hoàn: vé đã chuyển sang CANCELLED nhưng vẫn cần hiển thị buyer đã mua gì
+  const items =
+    order?.items.filter((item) =>
+      isRefund ? item.status === "CANCELLED" : item.status === "ACTIVE",
+    ) ?? [];
   const isLoading = orderQuery.isPending;
   const error = orderQuery.error ?? eventQuery.error;
   const message =
     quantityMutation.error ??
     removeMutation.error ??
     confirmMutation.error ??
-    cancelMutation.error;
+    cancelMutation.error ??
+    checkoutMutation.error ??
+    refundMutation.error;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -237,8 +298,14 @@ export default function OrderCartPage() {
                     : expired
                       ? "Your hold has expired"
                       : order.status === "PENDING_PAYMENT"
-                        ? "Cart confirmed"
-                        : "Review your cart"}
+                        ? "Complete your payment"
+                        : isPaid
+                          ? "Your tickets are paid"
+                          : order.status === "REFUND_PENDING"
+                            ? "Refund in progress"
+                            : order.status === "REFUNDED"
+                              ? "Order refunded"
+                              : "Review your cart"}
                 </h1>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {eventQuery.data ? (
@@ -251,7 +318,7 @@ export default function OrderCartPage() {
                   )}
                 </p>
               </div>
-              {isCart && !expired && !cancelled ? (
+              {(isCart || isPendingPayment) && !expired && !cancelled ? (
                 <div
                   role="timer"
                   aria-live="polite"
@@ -311,7 +378,49 @@ export default function OrderCartPage() {
                 </div>
               </section>
             ) : null}
-            {order.status === "PENDING_PAYMENT" ? (
+            {isPendingPayment && !expired && !cancelled ? (
+              <section
+                role="status"
+                className="mt-6 flex items-start gap-3 rounded-xl border border-primary/20 bg-accent p-5"
+              >
+                {awaitingPaymentResult ? (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="mt-0.5 size-5 animate-spin text-primary"
+                  />
+                ) : (
+                  <CheckCircle2
+                    aria-hidden="true"
+                    className="mt-0.5 size-5 text-primary"
+                  />
+                )}
+                <div>
+                  <h2 className="font-semibold">
+                    {awaitingPaymentResult
+                      ? "Confirming your payment"
+                      : "Your cart is confirmed"}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {awaitingPaymentResult ? (
+                      "We are waiting for the payment provider to confirm. This page updates automatically."
+                    ) : (
+                      <>
+                        {paymentReturn === "cancelled"
+                          ? "Payment was not completed. "
+                          : ""}
+                        Pay before{" "}
+                        {new Intl.DateTimeFormat("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        }).format(new Date(order.holdExpiresAt))}{" "}
+                        to keep your tickets. The hold is not extended.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </section>
+            ) : null}
+            {isPaid ? (
               <section
                 role="status"
                 className="mt-6 flex items-start gap-3 rounded-xl border border-primary/20 bg-accent p-5"
@@ -321,15 +430,48 @@ export default function OrderCartPage() {
                   className="mt-0.5 size-5 text-primary"
                 />
                 <div>
-                  <h2 className="font-semibold">Your cart is confirmed</h2>
+                  <h2 className="font-semibold">Payment successful</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Payment will be available in the next phase. Your tickets
-                    remain held until{" "}
-                    {new Intl.DateTimeFormat("en-US", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    }).format(new Date(order.holdExpiresAt))}
-                    .
+                    {order.paidAt ? (
+                      <>
+                        Paid on{" "}
+                        {new Intl.DateTimeFormat("en-US", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        }).format(new Date(order.paidAt))}
+                        .{" "}
+                      </>
+                    ) : null}
+                    Your tickets are reserved for you.
+                  </p>
+                </div>
+              </section>
+            ) : null}
+            {refund ? (
+              <section
+                role="status"
+                className="mt-6 flex items-start gap-3 rounded-xl border border-border bg-muted/50 p-5"
+              >
+                <Undo2
+                  aria-hidden="true"
+                  className="mt-0.5 size-5 text-muted-foreground"
+                />
+                <div>
+                  <h2 className="font-semibold">
+                    {refund.status === "COMPLETED"
+                      ? `Refund of ${money.format(refund.amount)} completed`
+                      : refund.status === "FAILED"
+                        ? "Refund needs attention"
+                        : `Refund of ${money.format(refund.amount)} is being processed`}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {refund.status === "FAILED"
+                      ? "We could not complete this refund automatically. Our team has been notified and will follow up."
+                      : refund.reason === "LATE_PAYMENT"
+                        ? "Your payment arrived after the hold had ended, so the tickets were no longer reserved. The full amount is returned to your payment method."
+                        : refund.reason === "EVENT_CANCELLED"
+                          ? "This event was cancelled. The full amount is returned to your payment method."
+                          : `You cancelled this order. ${refund.percent}% of the amount paid is returned to your payment method.`}
                   </p>
                 </div>
               </section>
@@ -532,7 +674,9 @@ export default function OrderCartPage() {
                   <div className="mt-4 h-20 animate-pulse rounded-xl bg-muted" />
                 )}
                 <div className="mt-5 flex justify-between border-t border-border pt-4 text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="text-muted-foreground">
+                    {isPaid || isRefund ? "Total paid" : "Subtotal"}
+                  </span>
                   <span className="font-semibold">
                     {money.format(order.totalAmount)}
                   </span>
@@ -568,11 +712,55 @@ export default function OrderCartPage() {
                 ) : null}
                 {isCart ? (
                   <p className="mt-3 text-center text-xs text-muted-foreground">
-                    Confirming keeps your tickets held. Payment will follow in
-                    the next phase.
+                    Confirming locks your selection. You then pay before the
+                    hold timer ends.
                   </p>
                 ) : null}
-                {/* OR08 chỉ cho CART: hủy khi PENDING_PAYMENT cần phối hợp với Payment, để tới P4 (D26) */}
+                {isPendingPayment && !expired && !cancelled ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => checkoutMutation.mutate()}
+                      disabled={
+                        checkoutMutation.isPending ||
+                        checkoutMutation.isSuccess ||
+                        awaitingPaymentResult
+                      }
+                      className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {checkoutMutation.isPending ||
+                      checkoutMutation.isSuccess ? (
+                        <>
+                          <LoaderCircle
+                            aria-hidden="true"
+                            className="size-4 animate-spin"
+                          />
+                          Redirecting to payment…
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard aria-hidden="true" className="size-4" />
+                          Pay {money.format(order.totalAmount)}
+                        </>
+                      )}
+                    </button>
+                    <p className="mt-3 text-center text-xs text-muted-foreground">
+                      Secure card payment is handled by Stripe.
+                    </p>
+                  </>
+                ) : null}
+                {isPaid ? (
+                  <button
+                    type="button"
+                    onClick={() => setRefundDialogOpen(true)}
+                    disabled={refundMutation.isPending}
+                    className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold text-destructive transition hover:bg-destructive/5 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Undo2 aria-hidden="true" className="size-4" />
+                    Cancel order and refund
+                  </button>
+                ) : null}
+                {/* OR08 chỉ cho CART: backend từ chối hủy PENDING_PAYMENT vì buyer có thể đang trả tiền (D27) */}
                 {isCart && !expired && !cancelled ? (
                   <button
                     type="button"
@@ -636,6 +824,80 @@ export default function OrderCartPage() {
                 <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
               ) : null}
               {cancelMutation.isPending ? "Cancelling…" : "Cancel cart"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={isRefundDialogOpen}
+        onOpenChange={(open) => {
+          if (!refundMutation.isPending) setRefundDialogOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel this order?</DialogTitle>
+            <DialogDescription>
+              Refunds are 100% up to 7 days before the event, 50% from 7 days
+              to 24 hours before, and not available within 24 hours of the
+              event.
+            </DialogDescription>
+          </DialogHeader>
+          {refundQuoteQuery.isPending ? (
+            <div
+              role="status"
+              aria-label="Loading refund amount"
+              className="h-16 animate-pulse rounded-xl bg-muted"
+            />
+          ) : refundQuoteQuery.isError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {getErrorMessage(
+                refundQuoteQuery.error,
+                "Could not load the refund amount.",
+              )}
+            </p>
+          ) : refundQuoteQuery.data.refundable ? (
+            <div className="rounded-xl bg-muted/60 p-4 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  Refund ({refundQuoteQuery.data.percent}%)
+                </span>
+                <span className="font-semibold">
+                  {money.format(refundQuoteQuery.data.amount)}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Your tickets are released immediately and this cannot be
+                undone. The final amount is calculated when you confirm.
+              </p>
+            </div>
+          ) : (
+            <p role="status" className="text-sm text-muted-foreground">
+              This order can no longer be refunded because the event starts in
+              less than 24 hours.
+            </p>
+          )}
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setRefundDialogOpen(false)}
+              disabled={refundMutation.isPending}
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-4 text-sm font-semibold hover:bg-muted"
+            >
+              Keep order
+            </button>
+            <button
+              type="button"
+              onClick={() => refundMutation.mutate()}
+              disabled={
+                refundMutation.isPending || !refundQuoteQuery.data?.refundable
+              }
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-destructive px-4 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {refundMutation.isPending ? (
+                <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
+              ) : null}
+              {refundMutation.isPending ? "Requesting…" : "Cancel and refund"}
             </button>
           </DialogFooter>
         </DialogContent>

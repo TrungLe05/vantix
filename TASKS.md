@@ -56,9 +56,18 @@ Nhánh `feature/payment-service` (14/11/2026). Kiểm chứng: integration test 
 
 ## P5 — Notification & check-in
 
-- [ ] notification-service consume `user.*` (gửi OTP, reset, mật khẩu tạm STAFF — không log payload), sự kiện Order/Payment.
-- [ ] Bảng `notifications`, API danh sách/đánh dấu đã đọc, WebSocket.
-- [ ] Order: phát hành vé/QR (`TICKETS_ISSUED`), API quét vé ADMIN/STAFF, chống quét trùng (trả ai quét, lúc nào).
+Nhánh `feature/notification-checkin` (14/11/2026, tách từ `feature/payment-service` — merge P4 trước). Kiểm chứng: integration test; **chưa chạy end-to-end**.
+
+- [x] Thiết kế `docs/notification/P5_notification_design.md`, `P5_notification_api_design.md`, `P5_notification_ui_plan.md`; D31–D36.
+- [x] notification-service consume `user.*` (gửi OTP, reset, mật khẩu tạm STAFF — không lưu, không log payload), sự kiện Order.
+- [x] Bảng `notifications`, API danh sách/đánh dấu đã đọc, WebSocket (ticket một lần).
+- [x] Order: phát hành vé/QR (`TICKETS_ISSUED`), API quét vé ADMIN/STAFF, chống quét trùng (trả ai quét, lúc nào).
+- [x] Frontend: vé + QR, chuông thông báo realtime, trang check-in.
+- [ ] 🔴 Chạy end-to-end: Kafka thật (vé → thông báo → WebSocket qua Gateway), SMTP thật (hoặc mail catcher) cho OTP/STAFF/đặt vé; ghi kết quả.
+- [ ] 🟠 Playwright cho vé/check-in/thông báo; thử camera `BarcodeDetector` trên điện thoại.
+- [ ] 🟠 Thêm `.open-next` vào ignore của ESLint (output build Cloudflare làm `npm run lint` báo hàng nghìn lỗi ở local).
+- [ ] ⚪ Thông báo cảnh báo bot (chờ P6), thông báo cho STAFF/ADMIN, tên sự kiện trong nội dung thông báo, chuyển nhượng vé (FR4 < 24 giờ).
+- [ ] ⚪ Tách `PageResponse` vào common-lib (đã có 3 bản sao: product, order, notification).
 
 ## P6 — Bot-detection
 

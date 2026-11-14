@@ -14,6 +14,7 @@ import com.dev.order_service.dto.response.OrderResponse;
 import com.dev.order_service.dto.response.PageResponse;
 import com.dev.order_service.dto.response.ValidatedCatalog;
 import com.dev.order_service.enums.OrderStatus;
+import com.dev.order_service.enums.TicketStatus;
 import com.dev.order_service.enums.OrderErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -234,6 +235,10 @@ public class OrderServiceImpl implements OrderService {
         if (isPaid(current)) {
             eventStartAt = catalogValidationService.eventStartAt(current.getEventId());
             percent = RefundPolicy.percent(Instant.now(), eventStartAt);
+            // Đơn đã có vé check-in thì OR11 từ chối, quote phải nói trước điều đó
+            if (current.getTickets().stream().anyMatch(t -> t.getStatus() == TicketStatus.CHECKED_IN)) {
+                percent = 0;
+            }
         }
         return RefundQuoteResponse.builder()
                 .orderId(orderId)

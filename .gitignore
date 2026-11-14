@@ -49,3 +49,5 @@ skills-lock.json
 # graphify: knowledge graph sinh cục bộ (/graphify), không commit
 graphify-out/
 docs/SESSION_HANDOFF.md
+
+.open-next

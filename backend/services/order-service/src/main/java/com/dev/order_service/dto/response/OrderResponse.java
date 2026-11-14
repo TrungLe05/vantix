@@ -18,5 +18,8 @@ public class OrderResponse {
     private String currency;
     private BigDecimal totalAmount;
     private Instant holdExpiresAt;
+    private Instant paidAt;
+    // null nếu Order chưa từng có yêu cầu hoàn tiền
+    private RefundResponse refund;
     private List<OrderItemResponse> items;
 }

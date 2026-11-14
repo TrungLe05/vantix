@@ -11,6 +11,8 @@ import java.util.UUID;
 public record ProductCatalog(
         UUID id,
         String status,
+        // Giờ bắt đầu sự kiện: mốc tính % hoàn vé (D16)
+        Instant startAt,
         Instant salesStartAt,
         Instant salesEndAt,
         boolean hasSeatMap,

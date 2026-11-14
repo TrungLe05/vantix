@@ -9,6 +9,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.mockito.ArgumentCaptor;
+import tools.jackson.databind.JsonNode;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -20,6 +22,7 @@ import java.util.concurrent.TimeoutException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -123,6 +126,27 @@ class OrderOutboxSchedulerIntegrationTest {
         assertThat(row(second).get("attempt_count")).isEqualTo(0); // không bị tính lượt oan
         assertThat(meterRegistry.get("outbox.pending").tag("outbox", "order_event_outbox").gauge().value())
                 .isGreaterThanOrEqualTo(2.0);
+    }
+
+    @Test
+    void payloadRecordIsSentToItsOwnTopicAsJsonObject() {
+        when(kafkaTemplate.send(anyString(), anyString(), any())).thenReturn(CompletableFuture.completedFuture(null));
+        UUID id = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        // Bản ghi kiểu P4: không có item_count/quantity, mang topic + payload JSON
+        jdbc.update("INSERT INTO order_event_outbox (id, order_id, buyer_id, event_id, occurred_at, topic, payload) " +
+                        "VALUES (?, ?, ?, ?, now(), 'order.refund-requested', ?)",
+                id, orderId, UUID.randomUUID(), UUID.randomUUID(),
+                "{\"refundId\":\"r-1\",\"amount\":85.00}");
+
+        scheduler.publishPendingEvents();
+
+        ArgumentCaptor<Object> message = ArgumentCaptor.forClass(Object.class);
+        verify(kafkaTemplate).send(eq("order.refund-requested"), eq(orderId.toString()), message.capture());
+        // Phải là object JSON (JsonNode), không phải String — String sẽ bị serializer bọc thành chuỗi
+        assertThat(message.getValue()).isInstanceOf(JsonNode.class);
+        assertThat(((JsonNode) message.getValue()).path("refundId").stringValue()).isEqualTo("r-1");
+        assertThat(row(id).get("published_at")).isNotNull();
     }
 
     private void failSends() {

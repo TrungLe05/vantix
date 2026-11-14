@@ -6,6 +6,8 @@ import com.dev.order_service.dto.request.AddOrderItemsRequest;
 import com.dev.order_service.dto.request.CreateOrderRequest;
 import com.dev.order_service.dto.request.UpdateOrderItemQuantityRequest;
 import com.dev.order_service.dto.response.AvailabilityResponse;
+import com.dev.order_service.dto.response.CheckoutResponse;
+import com.dev.order_service.dto.response.RefundQuoteResponse;
 import com.dev.order_service.dto.response.OrderResponse;
 import com.dev.order_service.dto.response.PageResponse;
 import com.dev.order_service.service.OrderService;
@@ -117,6 +119,30 @@ public class OrderController {
     ) {
         return ApiResponse.<OrderResponse>builder()
                 .result(orderService.confirm(SecurityUtils.getCurrentUserId(), orderId, idempotencyKey))
+                .build();
+    }
+
+    @PostMapping("/{orderId}/checkout")
+    @PreAuthorize("hasRole('BUYER')")
+    public ApiResponse<CheckoutResponse> checkout(@PathVariable UUID orderId) {
+        return ApiResponse.<CheckoutResponse>builder()
+                .result(orderService.checkout(SecurityUtils.getCurrentUserId(), orderId))
+                .build();
+    }
+
+    @GetMapping("/{orderId}/refund-quote")
+    @PreAuthorize("hasRole('BUYER')")
+    public ApiResponse<RefundQuoteResponse> refundQuote(@PathVariable UUID orderId) {
+        return ApiResponse.<RefundQuoteResponse>builder()
+                .result(orderService.getRefundQuote(SecurityUtils.getCurrentUserId(), orderId))
+                .build();
+    }
+
+    @PostMapping("/{orderId}/refund")
+    @PreAuthorize("hasRole('BUYER')")
+    public ApiResponse<OrderResponse> refund(@PathVariable UUID orderId) {
+        return ApiResponse.<OrderResponse>builder()
+                .result(orderService.requestRefund(SecurityUtils.getCurrentUserId(), orderId))
                 .build();
     }
 

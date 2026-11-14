@@ -69,7 +69,7 @@ Order response shape:
   }
 }
 ~~~
-Timestamp ISO-8601 UTC; null fields theo convention response. `status` của Order: `CART`, `PENDING_PAYMENT`, `PAID`, `TICKETS_ISSUED`, `CANCELLED`, `EXPIRED` (P3 chỉ phát sinh 4 trạng thái đầu/cuối, xem design). `items[].status`: `ACTIVE`, `REMOVED`, `EXPIRED`, `CANCELLED`. `ticketName`/`category`/`seatLabel`/`unitPrice` là snapshot lúc giữ, không đổi khi Product sửa giá. Order đang CART/PENDING_PAYMENT chỉ trả item `ACTIVE`; Order đã kết thúc (CANCELLED/EXPIRED…) trả toàn bộ item để xem lịch sử.
+Timestamp ISO-8601 UTC; null fields theo convention response. `status` của Order: `CART`, `PENDING_PAYMENT`, `PAID`, `TICKETS_ISSUED`, `CANCELLED`, `EXPIRED`, và từ P4 `REFUND_PENDING`, `REFUNDED` (P3 chỉ phát sinh 4 trạng thái đầu/cuối, xem design). Từ P4 response có thêm `paidAt` và `refund` — xem `../payment/P4_payment_api_design.md` (OR09–OR11). `items[].status`: `ACTIVE`, `REMOVED`, `EXPIRED`, `CANCELLED`. `ticketName`/`category`/`seatLabel`/`unitPrice` là snapshot lúc giữ, không đổi khi Product sửa giá. Order đang CART/PENDING_PAYMENT chỉ trả item `ACTIVE`; Order đã kết thúc (CANCELLED/EXPIRED…) trả toàn bộ item để xem lịch sử.
 
 ## 3. Endpoint
 
@@ -139,7 +139,7 @@ Gateway allowlist endpoint này cho phép màn hình public đọc; UI ghép v�
 ### OR08 — Hủy giỏ
 DELETE /api/orders/{orderId} · BUYER
 
-Buyer tự hủy Order chưa thanh toán (CART hoặc PENDING_PAYMENT): nhả mọi hold đúng một lần (hold → RELEASED, item → CANCELLED) và chuyển Order sang CANCELLED. Gọi lại trên Order đã CANCELLED/EXPIRED trả nguyên trạng (idempotent tự nhiên, không cần key). Order ở trạng thái khác trả 4005. Frontend dùng endpoint này cho nút "Cancel cart" **chỉ khi CART** (D26); hủy PENDING_PAYMENT phía backend vẫn được nhưng cần thiết kế lại ở P4 (phối hợp Payment).
+Buyer tự hủy giỏ **CART**: nhả mọi hold đúng một lần (hold → RELEASED, item → CANCELLED) và chuyển Order sang CANCELLED. Gọi lại trên Order đã CANCELLED/EXPIRED trả nguyên trạng (idempotent tự nhiên, không cần key). Order ở trạng thái khác — **kể cả PENDING_PAYMENT từ P4 (D27)** — trả 4005: buyer có thể đang trả tiền trên Stripe; bỏ thanh toán thì Order tự hết hạn theo deadline hold. Frontend dùng endpoint này cho nút "Cancel cart" chỉ khi CART (D26).
 
 ## 4. Thứ tự xử lý đề xuất
 

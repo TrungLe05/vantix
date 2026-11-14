@@ -39,13 +39,20 @@ Trạng thái: `TODO` · `IN_PROGRESS` · `IN_REVIEW` · `BLOCKED` · `DONE`. M�
 
 ## P4 — Payment
 
-- [ ] Thiết kế `P4_payment_design.md`, `P4_payment_api_design.md` (ERD `payments_service`, sequence thanh toán/hoàn, schema `payment.succeeded`/`payment.failed`/`refund.completed`/`refund.failed`).
-- [ ] Chốt xử lý payment thành công đến sau deadline hold; đồng bộ deadline Order ↔ Payment.
-- [ ] Stripe Checkout/PaymentIntent (test), Idempotency-Key khi khởi tạo thanh toán.
-- [ ] Webhook xác thực chữ ký, idempotent theo Stripe event id.
-- [ ] Order consumer: thành công → `PAID`, hold `PURCHASED`, held → sold; thất bại → nhả hold.
-- [ ] Refund: Order tính % theo 3 mốc, Payment gọi Refund API; hủy event → hoàn 100%.
-- [ ] Frontend: bước thanh toán sau `PENDING_PAYMENT`.
+Nhánh `feature/payment-service` (14/11/2026). Kiểm chứng: integration test trên Postgres/Redis thật với Stripe/Kafka giả lập; **chưa chạy với Stripe thật**.
+
+- [x] Thiết kế `docs/payment/P4_payment_design.md`, `P4_payment_api_design.md`, `P4_payment_ui_plan.md` (ERD, sequence thanh toán/hoàn, schema 5 topic).
+- [x] Chốt payment thành công đến sau deadline hold → hoàn 100% (D28); đồng bộ deadline bằng scheduler expire phiên Stripe (D27).
+- [x] Stripe Checkout Session (test), khởi tạo idempotent theo `order_id` + Stripe Idempotency-Key.
+- [x] Webhook xác thực chữ ký, idempotent theo Stripe event id.
+- [x] Order consumer: thành công → `PAID`, hold `PURCHASED`, held → sold; thất bại → nhả hold.
+- [x] Refund: Order tính % theo 3 mốc, Payment gọi Refund API; hủy event → hoàn 100% (D29).
+- [x] OR08 backend chỉ còn nhận CART (việc treo từ D26).
+- [x] Frontend: nút thanh toán sau `PENDING_PAYMENT`, hộp thoại hoàn tiền, mục Purchases.
+- [ ] 🔴 Chạy thật với Stripe test mode (`stripe listen`, thẻ 4242) cho cả luồng thanh toán, hết hạn và hoàn tiền; ghi kết quả.
+- [ ] 🟠 E2E Playwright cho luồng thanh toán/hoàn (cần Stripe test mode hoặc stub webhook) và kiểm tra UI trên trình duyệt.
+- [ ] 🟠 Quyết định có cấp "cửa sổ thanh toán" riêng khi confirm sát deadline hay giữ nguyên (D27).
+- [ ] ⚪ Đơn 0 đồng (vé miễn phí); hoàn từng vé; API ADMIN xử lý refund `FAILED`; giới hạn vé theo buyer qua nhiều Order (D24).
 
 ## P5 — Notification & check-in
 

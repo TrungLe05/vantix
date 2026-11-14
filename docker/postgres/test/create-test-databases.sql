@@ -13,10 +13,12 @@ FROM unnest(ARRAY[
     'users_service_test',
     'products_service_test',
     'orders_service_test',
+    'payments_service_test',
     -- Stack E2E (frontend/e2e, Playwright): DB riêng để seed tài khoản sạch, không lẫn dữ liệu integration test
     'users_service_e2e',
     'products_service_e2e',
-    'orders_service_e2e'
+    'orders_service_e2e',
+    'payments_service_e2e'
 ]) AS db
 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = db)
 \gexec

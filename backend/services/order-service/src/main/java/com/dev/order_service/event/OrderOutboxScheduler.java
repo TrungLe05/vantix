@@ -1,6 +1,5 @@
 package com.dev.order_service.event;
 
-import com.dev.commonlib_kafka.topic.KafkaTopics;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
 import java.util.UUID;
@@ -16,7 +16,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Gửi cart.item_added từ order_event_outbox (transactional outbox, D11).
+ * Gửi event từ order_event_outbox (transactional outbox, D11): cart.item_added (cột riêng) và các
+ * event có payload JSON như order.refund-requested (P4).
  * Lỗi gửi: backoff lũy thừa base × 2^attempt (trần max-backoff); sau max-attempts lần thì
  * dead-letter (dead_at) + log ERROR "OUTBOX_DEAD_LETTER" và không retry nữa. Gauge
  * outbox.pending/outbox.dead làm tín hiệu alert (D25).
@@ -29,6 +30,7 @@ public class OrderOutboxScheduler {
 
     private final JdbcTemplate jdbcTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final JsonMapper jsonMapper;
     private final long baseBackoffMs;
     private final long maxBackoffMs;
     private final int maxAttempts;
@@ -38,6 +40,7 @@ public class OrderOutboxScheduler {
     public OrderOutboxScheduler(
             JdbcTemplate jdbcTemplate,
             KafkaTemplate<String, Object> kafkaTemplate,
+            JsonMapper jsonMapper,
             MeterRegistry meterRegistry,
             @Value("${app.order.outbox-base-backoff-ms:5000}") long baseBackoffMs,
             @Value("${app.order.outbox-max-backoff-ms:300000}") long maxBackoffMs,
@@ -45,6 +48,7 @@ public class OrderOutboxScheduler {
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.kafkaTemplate = kafkaTemplate;
+        this.jsonMapper = jsonMapper;
         this.baseBackoffMs = baseBackoffMs;
         this.maxBackoffMs = maxBackoffMs;
         this.maxAttempts = maxAttempts;
@@ -60,13 +64,17 @@ public class OrderOutboxScheduler {
             fixedDelayString = "${app.order.outbox-poll-interval-ms:1000}")
     public void publishPendingEvents() {
         List<OutboxRecord> due = jdbcTemplate.query(
-                "SELECT id, order_id, buyer_id, event_id, item_count, quantity, occurred_at " +
+                "SELECT id, order_id, buyer_id, event_id, item_count, quantity, occurred_at, topic, payload " +
                         "FROM order_event_outbox " +
                         "WHERE published_at IS NULL AND dead_at IS NULL AND next_attempt_at <= now() " +
                         "ORDER BY created_at LIMIT 50",
                 (rs, row) -> new OutboxRecord(
                         rs.getObject("id", UUID.class),
-                        new CartItemAddedEvent(
+                        rs.getObject("order_id", UUID.class),
+                        rs.getString("topic"),
+                        rs.getString("payload"),
+                        // Bản ghi có payload không dùng các cột riêng của cart.item_added (có thể NULL)
+                        rs.getString("payload") != null ? null : new CartItemAddedEvent(
                                 rs.getObject("order_id", UUID.class),
                                 rs.getObject("buyer_id", UUID.class),
                                 rs.getObject("event_id", UUID.class),
@@ -79,11 +87,12 @@ public class OrderOutboxScheduler {
 
         for (OutboxRecord record : due) {
             try {
-                kafkaTemplate.send(
-                        KafkaTopics.ORDER_CART_ITEM_ADDED,
-                        record.event().orderId().toString(),
-                        record.event()
-                ).get(5, TimeUnit.SECONDS);
+                // Payload JSON gửi dưới dạng JsonNode: gửi String thì serializer bọc thành chuỗi JSON
+                Object message = record.payload() != null
+                        ? jsonMapper.readTree(record.payload())
+                        : record.cartEvent();
+                kafkaTemplate.send(record.topic(), record.orderId().toString(), message)
+                        .get(5, TimeUnit.SECONDS);
                 jdbcTemplate.update(
                         "UPDATE order_event_outbox SET published_at = now() WHERE id = ? AND published_at IS NULL",
                         record.id()
@@ -114,11 +123,11 @@ public class OrderOutboxScheduler {
         );
         // Chỉ log id nội bộ và loại lỗi; payload không có PII nhưng không cần đưa vào log
         if (Boolean.TRUE.equals(deadLettered)) {
-            log.error("OUTBOX_DEAD_LETTER outbox={} id={} orderId={} attempts={} lastError={}",
-                    TABLE_TAG, record.id(), record.event().orderId(), maxAttempts, errorType);
+            log.error("OUTBOX_DEAD_LETTER outbox={} id={} topic={} orderId={} attempts={} lastError={}",
+                    TABLE_TAG, record.id(), record.topic(), record.orderId(), maxAttempts, errorType);
         } else {
-            log.warn("Không thể phát cart.item_added, outboxId={} orderId={} error={}; sẽ retry",
-                    record.id(), record.event().orderId(), errorType);
+            log.warn("Không thể phát {}, outboxId={} orderId={} error={}; sẽ retry",
+                    record.topic(), record.id(), record.orderId(), errorType);
         }
     }
 
@@ -146,6 +155,6 @@ public class OrderOutboxScheduler {
         return current;
     }
 
-    private record OutboxRecord(UUID id, CartItemAddedEvent event) {
+    private record OutboxRecord(UUID id, UUID orderId, String topic, String payload, CartItemAddedEvent cartEvent) {
     }
 }

@@ -22,7 +22,7 @@ Chính sách hoàn vé: ≥ 7 ngày trước giờ diễn hoàn 100%, 24h–7 ng
 
 ## Trạng thái
 
-P0 hạ tầng ✅ · P1 User & Auth ✅ · P2 Product ✅ (thiếu test) · **P3 Order 🟡 đã code, chờ kiểm chứng k6/E2E** · P4–P9 chưa bắt đầu. Xem [PROGRESS.md](PROGRESS.md) và [TASKS.md](TASKS.md).
+P0 hạ tầng ✅ · P1 User & Auth ✅ · P2 Product ✅ · P3 Order ✅ · **P4 Payment 🟡 đã code + integration test, chờ chạy với Stripe test thật** · P5–P9 chưa bắt đầu. Xem [PROGRESS.md](PROGRESS.md) và [TASKS.md](TASKS.md).
 
 ## Stack
 
@@ -65,6 +65,17 @@ docs/           Tài liệu thiết kế theo phase — nguồn sự thật cho 
 
 Mọi request từ trình duyệt đi qua Gateway `http://localhost:8999/api/...`.
 
+### Thanh toán Stripe (test mode)
+
+1. Đặt `STRIPE_SECRET_KEY` (dạng `sk_test_...`) trong môi trường của payment-service. Chỉ dùng khóa test.
+2. Chuyển tiếp webhook về máy bằng Stripe CLI, lấy signing secret (`whsec_...`) nó in ra làm `STRIPE_WEBHOOK_SECRET` rồi khởi động payment-service:
+   ```bash
+   stripe listen --forward-to localhost:8999/api/payments/webhooks/stripe
+   ```
+3. Chạy đủ api-gateway, user, product, order, payment, Kafka. Giữ vé → Confirm cart → **Pay** → trả bằng thẻ test `4242 4242 4242 4242` (ngày hết hạn tương lai, CVC bất kỳ).
+
+Thiếu khóa thì payment-service vẫn khởi động nhưng tạo phiên thanh toán trả `5101`/`4013` và mọi webhook bị từ chối (`5201`).
+
 ## Tài liệu
 
 | File | Nội dung |
@@ -74,7 +85,7 @@ Mọi request từ trình duyệt đi qua Gateway `http://localhost:8999/api/...
 | [PROGRESS.md](PROGRESS.md) | Tiến độ theo phase, những gì đã có trong code |
 | [TASKS.md](TASKS.md) | Backlog việc cần làm |
 | `docs/00_roadmap_phases_v1.md` | Roadmap P0–P9, yêu cầu chức năng |
-| `docs/auth/`, `docs/product/`, `docs/order/` | Design, API design, UI plan theo phase |
+| `docs/auth/`, `docs/product/`, `docs/order/`, `docs/payment/` | Design, API design, UI plan theo phase |
 | `CLAUDE.md`, `AGENTS.md`, `frontend/AGENTS.md` | Quy ước cho AI agent và convention code |
 
 ## Giới hạn đã biết
@@ -82,4 +93,5 @@ Mọi request từ trình duyệt đi qua Gateway `http://localhost:8999/api/...
 - Dữ liệu ML là tự tạo (k6 mô phỏng bot + thao tác thật), không phải dữ liệu production.
 - Stripe chỉ ở chế độ test, tiền tệ USD.
 - Integration test cần Postgres/Redis đang chạy (compose) và DB test: `docker exec -i postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres' < docker/postgres/test/create-test-databases.sql`, rồi `cd backend && mvn verify`.
-- Chưa có kết quả k6, chưa có rate limiting, chưa deploy.
+- Thanh toán mới kiểm chứng bằng integration test với Stripe giả lập; chưa hỗ trợ đơn 0 đồng, chưa hoàn từng vé.
+- Chưa có rate limiting, chưa deploy.

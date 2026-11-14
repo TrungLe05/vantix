@@ -6,6 +6,9 @@ public enum OrderStatus {
     PAID,
     TICKETS_ISSUED,
     CANCELLED,
-    EXPIRED
+    EXPIRED,
+    // P4: đã thanh toán, đang chờ Payment hoàn tiền / đã hoàn xong
+    REFUND_PENDING,
+    REFUNDED
 }
 

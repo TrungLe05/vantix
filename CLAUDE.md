@@ -66,7 +66,7 @@ Vantix là nền tảng bán vé sự kiện (vé ghế số SEATED + vé đứn
 
 **Transaction & Kafka**
 - user-service: dùng `TransactionTemplate` bao riêng từng lệnh ghi (có pattern "ghi rồi mới ném lỗi"). product-service: `@Transactional` thường. Chọn theo service đang sửa.
-- Publish Kafka không được làm hỏng transaction nghiệp vụ. user: gửi sau `transactionTemplate.execute`, lỗi chỉ log (chấp nhận mất event). product (`event_outbox`) và order (`order_event_outbox`): **transactional outbox** — ghi cùng transaction, scheduler gửi + retry, consumer phải idempotent. Key = id của aggregate.
+- Publish Kafka không được làm hỏng transaction nghiệp vụ. user: gửi sau `transactionTemplate.execute`, lỗi chỉ log (chấp nhận mất event). product (`event_outbox`), order (`order_event_outbox`) và payment (`payment_event_outbox`): **transactional outbox** — ghi cùng transaction, scheduler gửi + retry, consumer phải idempotent. Key = id của aggregate.
 - Hằng số topic ở `KafkaTopics`, payload là `record` trong `commonlib-kafka/event`. Chỉ thêm topic khi có code dùng.
 
 **DB**
@@ -83,6 +83,7 @@ Vantix là nền tảng bán vé sự kiện (vé ghế số SEATED + vé đứn
 - Bot rủi ro cao: chặn lần thêm giỏ kế tiếp + đánh dấu review, **không** hủy hold hiện tại.
 - Hoàn vé: ≥ 7 ngày 100%, 24h–7 ngày 50%, < 24h 0%, ADMIN hủy sự kiện 100%.
 - Vai trò: BUYER, ADMIN, STAFF (ADMIN tạo). SELLER để sau.
+- P4 Payment (D27–D30): Stripe Checkout Session; hạn thanh toán = deadline hold (không gia hạn), Payment tự expire phiên; tiền vào khi Order đã EXPIRED/CANCELLED → hoàn 100%, không hồi sinh Order; hoàn tiền qua Kafka (`order.refund-requested`), hoàn cả đơn; OR08 chỉ hủy CART; API chỉ cho service gọi đặt dưới `/internal/**` và không route qua Gateway.
 - P3 Order: một Order = một event; mỗi buyer tối đa một CART/event; hold chung deadline 10 phút từ hold đầu, thêm item không gia hạn; tạo hold all-or-nothing.
 
 ## 6. Bảo mật & dữ liệu nhạy cảm
@@ -116,13 +117,14 @@ Vantix là nền tảng bán vé sự kiện (vé ghế số SEATED + vé đứn
 | `docs/auth/` | `P1_auth_design.md`, `P1_auth_api_design.md` (API đã khớp code, **mới hơn** design) |
 | `docs/product/` | `P2_product_design.md`, `P2_product_api_design.md`, `P2_product_ui_plan.md`, `P1_auth_ui_plan.md` |
 | `docs/order/` | `P3_order_design.md`, `P3_order_api_design.md`, `P3_order_ui_plan.md` |
+| `docs/payment/` | `P4_payment_design.md`, `P4_payment_api_design.md`, `P4_payment_ui_plan.md` |
 | `README.md`, `ARCHITECTURE.md`, `DECISIONS.md`, `PROGRESS.md`, `TASKS.md` (gốc repo) | Tổng quan, kiến trúc, quyết định, tiến độ, backlog — cập nhật khi đổi trạng thái phase |
 
 Quy ước mỗi phase: `Pn_*_design.md` (quyết định, ERD, sequence) → `Pn_*_api_design.md` (hợp đồng API, errorCode, bước thực thi) → `Pn_*_ui_plan.md` (frontend). **Khi code lệch tài liệu, sửa tài liệu trong cùng thay đổi**; khi tài liệu lệch code đang chạy thì code là sự thật, báo lại để cập nhật doc.
 
 ## 9. Tiến độ
 
-P0 hạ tầng ✅ · P1 User & Auth ✅ (14 API) · P2 Product ✅ (có integration test) · P3 Order 🟡 đã code + test concurrency/integration (9 API, hold Redis + DB, outbox có dead-letter, consumer `product.event-cancelled`, UI cart; còn: E2E xuyên service + kết quả k6) · P4–P9 chưa bắt đầu. Integration test dùng Postgres/Redis thật (D21: compose local, service container ở CI, DB `*_test` tạo bằng `docker/postgres/test/create-test-databases.sql`). Chi tiết: `PROGRESS.md`, backlog: `TASKS.md`.
+P0 hạ tầng ✅ · P1 User & Auth ✅ (14 API) · P2 Product ✅ (có integration test) · P3 Order ✅ (9 API, hold Redis + DB, outbox có dead-letter, E2E Playwright, k6) · P4 Payment 🟡 đã code + integration test (Stripe Checkout, webhook idempotent, outbox, hoàn tiền qua Kafka, OR09–OR11, UI thanh toán/hoàn; còn: chạy với Stripe test thật, E2E) · P5–P9 chưa bắt đầu. Integration test dùng Postgres/Redis thật (D21: compose local, service container ở CI, DB `*_test` tạo bằng `docker/postgres/test/create-test-databases.sql`). Chi tiết: `PROGRESS.md`, backlog: `TASKS.md`.
 
 ## 10. Cách làm việc với Claude
 

@@ -76,6 +76,13 @@ export async function updateOrderItemQuantity(
   return response.data.result;
 }
 
+// OR08 — hủy giỏ, nhả mọi hold ngay. UI chỉ cho dùng khi Order đang CART (D26: PENDING_PAYMENT hoãn tới P4)
+export async function cancelOrder(orderId: string) {
+  const response = await apiClient.delete<ApiResponse<Order>>(`/orders/${orderId}`);
+  if (!response.data.result) throw new Error("Could not cancel this cart");
+  return response.data.result;
+}
+
 export async function confirmOrder(orderId: string) {
   const response = await apiClient.post<ApiResponse<Order>>(
     `/orders/${orderId}/confirm`,

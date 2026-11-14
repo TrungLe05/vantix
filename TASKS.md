@@ -12,7 +12,7 @@ Trạng thái: `TODO` · `IN_PROGRESS` · `IN_REVIEW` · `BLOCKED` · `DONE`. M�
 | A2 | Service kết nối đúng DB (Flyway chạy) | 🔴 | DONE | #29, #30, #31 | Flyway của user/product/order chạy trên DB test cùng Postgres compose; DB dev tên đúng `application.yaml` (đã có sẵn trên container) |
 | D1 | Gỡ log fingerprint JWT secret (`JwtUtils`) | 🔴 | DONE | trước đợt này | Chỉ còn log TTL |
 | D2 | Log `DataIntegrityViolation`, token bị từ chối, lỗi OAuth2 chỉ còn loại/mã lỗi | 🔴 | DONE | trước đợt này | Đã rà `BaseGlobalExceptionHandler`, `JwtAuthenticationGlobalFilter`, `OAuth2LoginFailureHandler` |
-| D3 | Đánh giá rotate `JWT_SECRET_KEY` (fingerprint từng bị log) | 🟠 | BLOCKED | — | Cần chủ repo xác nhận log dev cũ có từng chia sẻ/công khai không; không đọc `.env` |
+| D3 | Đánh giá rotate `JWT_SECRET_KEY` (fingerprint từng bị log) | 🟠 | DONE | — (local) | 14/11/2026 theo yêu cầu chủ repo: sinh secret mới 64 byte trong `backend/.env` (không in, không commit). Cần restart user-service + api-gateway; mọi phiên cũ bị đăng xuất |
 | E1 | `.env.example` khớp biến code, `frontend/.env.example`, bỏ ignore `.env.example` | 🟠 | DONE | trước đợt này | |
 | F1 | Gateway log `DEBUG` → `INFO` mặc định, `DEBUG` theo profile `dev` | ⚪ | DONE | #28 | `SPRING_PROFILES_ACTIVE=dev` để bật DEBUG |
 | C5 | Test mcp allowlist ở Gateway | 🟠 | DONE | #28 | `GatewayAuthAndCorsIntegrationTest`: chặn ngoài allowlist (9004), cho phép đúng method+path |
@@ -22,13 +22,13 @@ Trạng thái: `TODO` · `IN_PROGRESS` · `IN_REVIEW` · `BLOCKED` · `DONE`. M�
 | G1 | OTP nguyên tử (`INCR`/Lua) + test concurrency | 🟠 | DONE | #29 | Lua script cho verify, `SET NX` cho cooldown (D22). Code cũ fail 2 test song song |
 | B1 | Test product: publish gom lý do, PR10 all-or-nothing, PR12 seat, ẩn DRAFT | 🟠 | DONE | #30 | `ProductCatalogIntegrationTest` 12 case; sửa 3 lỗi test phát hiện: PR10 trả 1005 thay 3203, PR12 race gán ghế (7/8 request cùng thắng), PR12 không chặn field sai category |
 | P3-D1 | Unit test `CatalogValidationService`, `OrderCommandService` | 🟠 | DONE | #31 | `CatalogValidationServiceTest` (14, Mockito); state transition của `OrderCommandService` test ở mức integration (`OrderLifecycleIntegrationTest`, 12) vì phụ thuộc khóa/SQL |
-| P3-D2 | Giới hạn số vé tối đa mỗi request/Order (cấu hình được) | 🟠 | DONE | #32 | Mặc định 10/Order, lỗi `4012` (D24) — con số chờ xác nhận nghiệp vụ |
+| P3-D2 | Giới hạn số vé tối đa mỗi request/Order (cấu hình được) | 🟠 | DONE | #32 | Mặc định 10/Order, lỗi `4012` (D24, đã xác nhận) |
 | P3-D3 | Phân trang + lọc status `GET /orders` | 🟠 | DONE | #32 | Đổi shape sang `PageResponse`; đã cập nhật `frontend/src/lib/api/orders.ts` cùng PR |
 | P3-C | Integration/concurrency order: tranh ghế, tranh GA, idempotency replay/conflict, expire đúng một lần, consumer hủy event lặp | 🔴 | DONE | #31 | `OrderConcurrencyIntegrationTest` (13); sửa optimistic-lock 500 và deadlock khi expire song song (D23) |
 | P3-A | E2E vòng đời đơn: hold → thêm → sửa GA → confirm → hết hạn → hủy event | 🔴 | IN_REVIEW | test/e2e-playwright | Playwright `frontend/e2e` (17 test + 1 cần tài khoản mcp) trên stack thật Gateway/user/product/order/Kafka với DB `*_e2e`. Phát hiện + sửa: consumer Kafka order-service chưa từng chạy (thiếu `spring-boot-starter-kafka`), route `/change-password` không tồn tại. Hết hạn 10 phút không chạy qua UI (đã phủ ở integration test) |
 | P3-B | k6 `seat-contention.js` + kết quả trong `k6/results/` | 🔴 | BLOCKED | #34 | Script + `invariants.sql` + README đã vào repo, sửa threshold GA. Chưa có kết quả: máy chưa cài `k6`, không được pull `grafana/k6`; cần thêm tài khoản BUYER (seed chỉ 5) |
 | P3-D4 | DLQ/alerting outbox, backoff thay chu kỳ cố định | 🟠 | DONE | #33 | D25; sửa kèm lỗi publisher product không parse được `cancelledAt` (outbox kẹt khi có event bị hủy). Rule alert Prometheus chờ P9 |
-| P3-D5 | Đánh giá dùng OR08 (hủy giỏ) ở frontend | ⚪ | DONE | #34 | Khuyến nghị D26: dùng cho CART, hoãn PENDING_PAYMENT tới P4 — chờ quyết định nghiệp vụ, chưa triển khai |
+| P3-D5 | Đánh giá dùng OR08 (hủy giỏ) ở frontend | ⚪ | DONE | #34, feat/order-cancel-cart | D26 đã chốt: nút "Cancel cart" chỉ cho CART; PENDING_PAYMENT xem lại ở P4 |
 
 ## Tài liệu
 

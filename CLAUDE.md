@@ -42,7 +42,8 @@ Vantix là nền tảng bán vé sự kiện (vé ghế số SEATED + vé đứn
 | assistant | 9006 | — |
 
 - Service Java có `context-path: /api` → controller mapping **không** thêm `/api` (ví dụ `@RequestMapping("/events")`).
-- Tên DB trong `application.yaml` là nguồn sự thật (một số doc cũ ghi tên số ít, sai). `docker-compose` **không** tạo DB tự động → phải tạo DB trước khi chạy service mới, nếu không Flyway lỗi.
+- Tên DB trong `application.yaml` là nguồn sự thật (một số doc cũ ghi tên số ít, sai). `docker-compose` tạo 5 DB qua `docker/postgres/init/01-create-databases.sql` **chỉ khi volume Postgres còn trống**; volume cũ chạy tay script (README), nếu không Flyway lỗi.
+- Cổng dev phụ: pgAdmin 8081, Kafka UI 8085, RedisInsight 5540.
 
 ## 4. Convention backend
 
@@ -121,7 +122,7 @@ Quy ước mỗi phase: `Pn_*_design.md` (quyết định, ERD, sequence) → `P
 
 ## 9. Tiến độ
 
-P0 hạ tầng ✅ · P1 User & Auth ✅ (14 API) · P2 Product ✅ phần lớn (còn: bootstrap DB `products_service`, chưa có test) · P3 Order 🟡 đã code + test concurrency/integration (9 API, hold Redis + DB, outbox có dead-letter, consumer `product.event-cancelled`, UI cart; còn: E2E xuyên service + kết quả k6) · P4–P9 chưa bắt đầu. Integration test dùng Postgres/Redis thật (D21: compose local, service container ở CI, DB `*_test` tạo bằng `docker/postgres/test/create-test-databases.sql`). Chi tiết: `PROGRESS.md`, backlog: `TASKS.md`.
+P0 hạ tầng ✅ · P1 User & Auth ✅ (14 API) · P2 Product ✅ (có integration test) · P3 Order 🟡 đã code + test concurrency/integration (9 API, hold Redis + DB, outbox có dead-letter, consumer `product.event-cancelled`, UI cart; còn: E2E xuyên service + kết quả k6) · P4–P9 chưa bắt đầu. Integration test dùng Postgres/Redis thật (D21: compose local, service container ở CI, DB `*_test` tạo bằng `docker/postgres/test/create-test-databases.sql`). Chi tiết: `PROGRESS.md`, backlog: `TASKS.md`.
 
 ## 10. Cách làm việc với Claude
 

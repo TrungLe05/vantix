@@ -76,4 +76,23 @@ class InternalUserContactIntegrationTest extends AbstractUserServiceIT {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value(2601));
     }
+
+    @Test
+    void internalCallerGetsAccountAgeWithoutPii() throws Exception {
+        mvc.perform(get("/internal/users/" + user.getId() + "/account")
+                        .header("X-User-Id", SERVICE_ID).header("X-User-Role", "INTERNAL"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.userId").value(user.getId().toString()))
+                .andExpect(jsonPath("$.result.createdAt").isNotEmpty())
+                .andExpect(jsonPath("$.result.email").doesNotExist())
+                .andExpect(jsonPath("$.result.fullName").doesNotExist());
+        mvc.perform(get("/internal/users/" + user.getId() + "/account")
+                        .header("X-User-Id", user.getId().toString()).header("X-User-Role", "ADMIN"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(1004));
+        mvc.perform(get("/internal/users/" + UUID.randomUUID() + "/account")
+                        .header("X-User-Id", SERVICE_ID).header("X-User-Role", "INTERNAL"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(2601));
+    }
 }

@@ -4,6 +4,7 @@ import com.dev.commonlib_api_response.exception.AppException;
 import com.dev.commonlib_kafka.event.StaffAccountCreatedEvent;
 import com.dev.commonlib_kafka.topic.KafkaTopics;
 import com.dev.user_service.dto.request.CreateStaffRequest;
+import com.dev.user_service.dto.response.UserAccountResponse;
 import com.dev.user_service.dto.response.UserContactResponse;
 import com.dev.user_service.dto.response.UserResponse;
 import com.dev.user_service.entities.User;
@@ -54,6 +55,17 @@ public class UserServiceImpl implements UserService{
                 .orElseThrow(() -> new AppException(UserErrorCode.USER_NOT_FOUND));
     }
 
+    @Override
+    public UserAccountResponse getAccount(UUID userId) {
+        // Chỉ trả mốc tạo tài khoản: bot-detection không cần (và không được nhận) email/tên
+        return userRepository.findById(userId)
+                .filter(u -> u.getDeletedAt() == null)
+                .map(u -> UserAccountResponse.builder()
+                        .userId(u.getId())
+                        .createdAt(u.getCreatedAt())
+                        .build())
+                .orElseThrow(() -> new AppException(UserErrorCode.USER_NOT_FOUND));
+    }
 
     @Override
     public UserResponse createStaff(CreateStaffRequest request) {

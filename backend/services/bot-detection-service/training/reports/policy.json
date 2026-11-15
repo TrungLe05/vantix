@@ -1,0 +1,140 @@
+{
+  "validation_A": {
+    "current": {
+      "botfarm": {
+        "blocked": 6,
+        "accounts": 6,
+        "median_adds_before_block": 0.0
+      },
+      "botfast": {
+        "blocked": 4,
+        "accounts": 4,
+        "median_adds_before_block": 0.5
+      },
+      "botviewer": {
+        "blocked": 4,
+        "accounts": 4,
+        "median_adds_before_block": 1.5
+      },
+      "human": {
+        "blocked": 1,
+        "accounts": 50,
+        "median_adds_before_block": 1.0
+      }
+    },
+    "d46": {
+      "botfarm": {
+        "blocked": 5,
+        "accounts": 6,
+        "median_adds_before_block": 0.0
+      },
+      "botfast": {
+        "blocked": 4,
+        "accounts": 4,
+        "median_adds_before_block": 1.5
+      },
+      "botviewer": {
+        "blocked": 4,
+        "accounts": 4,
+        "median_adds_before_block": 2.5
+      },
+      "human": {
+        "blocked": 0,
+        "accounts": 50,
+        "median_adds_before_block": null
+      }
+    }
+  },
+  "test_B": {
+    "current": {
+      "botfarm": {
+        "blocked": 17,
+        "accounts": 24,
+        "median_adds_before_block": 0.0
+      },
+      "botfast": {
+        "blocked": 18,
+        "accounts": 18,
+        "median_adds_before_block": 0.0
+      },
+      "botviewer": {
+        "blocked": 14,
+        "accounts": 14,
+        "median_adds_before_block": 1.0
+      },
+      "human": {
+        "blocked": 7,
+        "accounts": 200,
+        "median_adds_before_block": 1.0
+      }
+    },
+    "d46": {
+      "botfarm": {
+        "blocked": 15,
+        "accounts": 24,
+        "median_adds_before_block": 0.0
+      },
+      "botfast": {
+        "blocked": 18,
+        "accounts": 18,
+        "median_adds_before_block": 1.0
+      },
+      "botviewer": {
+        "blocked": 14,
+        "accounts": 14,
+        "median_adds_before_block": 2.0
+      },
+      "human": {
+        "blocked": 0,
+        "accounts": 200,
+        "median_adds_before_block": null
+      }
+    }
+  },
+  "replay_C_collected_under_current_policy": {
+    "current": {
+      "botfarm": {
+        "blocked": 0,
+        "accounts": 4,
+        "median_adds_before_block": null
+      },
+      "botfast": {
+        "blocked": 18,
+        "accounts": 18,
+        "median_adds_before_block": 0.0
+      },
+      "botviewer": {
+        "blocked": 14,
+        "accounts": 14,
+        "median_adds_before_block": 1.0
+      },
+      "human": {
+        "blocked": 2,
+        "accounts": 199,
+        "median_adds_before_block": 1.0
+      }
+    },
+    "d46": {
+      "botfarm": {
+        "blocked": 0,
+        "accounts": 4,
+        "median_adds_before_block": null
+      },
+      "botfast": {
+        "blocked": 13,
+        "accounts": 18,
+        "median_adds_before_block": 1.0
+      },
+      "botviewer": {
+        "blocked": 3,
+        "accounts": 14,
+        "median_adds_before_block": 2.0
+      },
+      "human": {
+        "blocked": 0,
+        "accounts": 199,
+        "median_adds_before_block": null
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
 # Vantix — Phase 5: Notification & Check-in Design
 
-> **Trạng thái:** Đã triển khai (14/11/2026), kiểm chứng bằng integration test (Postgres/Redis thật; SMTP, Kafka, user-service giả lập; WebSocket thật trên cổng ngẫu nhiên). **Chưa chạy end-to-end** với Kafka + SMTP thật và chưa có E2E trình duyệt — xem mục 8.
+> **Trạng thái:** Đã triển khai (14/11/2026), kiểm chứng bằng integration test (Postgres/Redis thật; SMTP, Kafka, user-service giả lập; WebSocket thật trên cổng ngẫu nhiên). Đã chạy end-to-end 15/11/2026 với Kafka thật, WebSocket qua Gateway và SMTP sink local (`docs/reports/2026-11-15-p5-e2e-kafka-smtp.md`); chưa gửi qua SMTP thật có auth/TLS, chưa có E2E trình duyệt — xem mục 8.
 > **Liên quan:** ../00_roadmap_phases_v1.md (P5), ../payment/P4_payment_design.md, P5_notification_api_design.md, P5_notification_ui_plan.md, `DECISIONS.md` D31–D36.
 > **Phạm vi:** phát hành vé + QR sau thanh toán, check-in chống quét trùng (Order); thông báo trong ứng dụng + email + WebSocket (notification-service); email tài khoản P1 (OTP, mật khẩu tạm STAFF) lần đầu thực sự được gửi.
 
@@ -152,7 +152,7 @@ sequenceDiagram
 
 ## 8. Giới hạn và việc còn lại
 
-- Chưa chạy end-to-end với Kafka + SMTP thật; chưa có Playwright cho vé/check-in/thông báo; chưa kiểm tra camera trên thiết bị thật.
+- Đã E2E Kafka + WebSocket qua Gateway + SMTP sink local (15/11/2026, `docs/reports/2026-11-15-p5-e2e-kafka-smtp.md`); chưa gửi qua SMTP thật có auth/STARTTLS; chưa có Playwright cho vé/check-in/thông báo; chưa kiểm tra camera trên thiết bị thật.
 - Nội dung thông báo không có tên sự kiện (Notification không gọi Product); email văn bản thuần, tiếng Anh.
 - Thông báo cảnh báo bot (roadmap P5 mục 1) chờ P6 có topic `bot_score.evaluated`.
 - Chưa có thông báo cho STAFF/ADMIN; chuông thông báo chỉ hiện cho BUYER.

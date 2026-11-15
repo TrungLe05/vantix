@@ -22,7 +22,7 @@ Chính sách hoàn vé: ≥ 7 ngày trước giờ diễn hoàn 100%, 24h–7 ng
 
 ## Trạng thái
 
-P0 hạ tầng ✅ · P1 User & Auth ✅ · P2 Product ✅ · P3 Order ✅ · **P4 Payment 🟡** và **P5 Notification & check-in 🟡** đã code + integration test; thanh toán/hết hạn/hoàn tiền đã chạy thật với Stripe test mode (15/11/2026), còn chờ E2E Kafka/SMTP · **P6 Bot-detection 🟡** đã code, huấn luyện trên dữ liệu k6 tự tạo, có báo cáo và chính sách chặn D46 · P7–P9 chưa bắt đầu. Test: backend 181, bot-detection 18 (pytest), Playwright cho P1–P3. Xem [PROGRESS.md](PROGRESS.md) và [TASKS.md](TASKS.md).
+P0 hạ tầng ✅ · P1 User & Auth ✅ · P2 Product ✅ · P3 Order ✅ · **P4 Payment 🟡** và **P5 Notification & check-in 🟡** đã code + integration test; thanh toán/hết hạn/hoàn tiền đã chạy thật với Stripe test mode (15/11/2026), P5 đã chạy E2E Kafka + WebSocket + SMTP (sink local) 15/11/2026, còn gửi qua SMTP thật và kiểm tra UI · **P6 Bot-detection 🟡** đã code, huấn luyện trên dữ liệu k6 tự tạo, có báo cáo và chính sách chặn D46 · P7–P9 chưa bắt đầu. Test: backend 181, bot-detection 18 (pytest), Playwright cho P1–P3. Xem [PROGRESS.md](PROGRESS.md) và [TASKS.md](TASKS.md).
 
 ## Stack
 

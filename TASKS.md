@@ -50,7 +50,7 @@ Nhánh `feature/payment-service` (14/11/2026). Kiểm chứng: integration test 
 - [x] OR08 backend chỉ còn nhận CART (việc treo từ D26).
 - [x] Frontend: nút thanh toán sau `PENDING_PAYMENT`, hộp thoại hoàn tiền, mục Purchases.
 - [x] 🔴 **DONE** (15/11/2026) Chạy thật với Stripe test mode (`stripe listen`, thẻ 4242) cho cả luồng thanh toán, hết hạn và hoàn tiền — cả ba đạt, kết quả `docs/reports/2026-11-15-stripe-test-mode.md`.
-- [ ] 🟠 Stack test dùng chung Kafka dev: consumer group mới đọc từ offset 0 và xử lý lại bản tin dev (report mục Phát hiện 2) — đặt `auto-offset-reset=latest` cho group test hoặc tách topic/cluster.
+- [ ] 🟠 Stack test dùng chung Kafka dev: consumer group mới đọc từ offset 0 và xử lý lại bản tin dev (report mục Phát hiện 2) — đặt `auto-offset-reset=latest` cho group test hoặc tách topic/cluster. Lần E2E P5 đã dùng `latest` nhưng stack dev vẫn sẽ đọc bản tin của stack test (report P5, phát hiện 1) → cần Kafka/topic riêng.
 - [ ] ⚪ Cân nhắc tắt Stripe Adaptive Pricing (Checkout hiển thị VND mặc định; tiền vẫn ghi nhận đúng USD).
 - [ ] 🟠 E2E Playwright cho luồng thanh toán/hoàn (cần Stripe test mode hoặc stub webhook) và kiểm tra UI trên trình duyệt.
 - [ ] 🟠 Quyết định có cấp "cửa sổ thanh toán" riêng khi confirm sát deadline hay giữ nguyên (D27).
@@ -65,7 +65,8 @@ Nhánh `feature/notification-checkin` (14/11/2026, tách từ `feature/payment-s
 - [x] Bảng `notifications`, API danh sách/đánh dấu đã đọc, WebSocket (ticket một lần).
 - [x] Order: phát hành vé/QR (`TICKETS_ISSUED`), API quét vé ADMIN/STAFF, chống quét trùng (trả ai quét, lúc nào).
 - [x] Frontend: vé + QR, chuông thông báo realtime, trang check-in.
-- [ ] 🔴 **TODO** (Stripe đã chạy xong 15/11/2026; Resend sandbox chỉ gửi được tới email chủ tài khoản) Chạy end-to-end: Kafka thật (vé → thông báo → WebSocket qua Gateway), SMTP thật (hoặc mail catcher) cho OTP/STAFF/đặt vé; ghi kết quả.
+- [x] 🔴 **DONE** (15/11/2026) Chạy end-to-end: Kafka thật (vé → thông báo → WebSocket qua Gateway), SMTP (sink local thay mail catcher) cho OTP/quên mật khẩu/STAFF/đặt vé/hoàn tiền — đạt, `docs/reports/2026-11-15-p5-e2e-kafka-smtp.md`.
+- [ ] 🟠 Gửi email qua SMTP thật có auth/STARTTLS (Resend) với địa chỉ nhận hợp lệ — lần E2E dùng sink local không TLS.
 - [ ] 🟠 Playwright cho vé/check-in/thông báo; thử camera `BarcodeDetector` trên điện thoại.
 - [ ] 🟠 Thêm `.open-next` vào ignore của ESLint (output build Cloudflare làm `npm run lint` báo hàng nghìn lỗi ở local).
 - [ ] ⚪ Thông báo cảnh báo bot (chờ P6), thông báo cho STAFF/ADMIN, tên sự kiện trong nội dung thông báo, chuyển nhượng vé (FR4 < 24 giờ).

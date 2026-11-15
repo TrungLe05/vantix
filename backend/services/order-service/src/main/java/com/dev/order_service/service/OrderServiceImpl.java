@@ -4,6 +4,8 @@ import com.dev.commonlib_api_response.exception.AppException;
 import com.dev.commonlib_api_response.exception.CommonErrorCode;
 import com.dev.order_service.client.PaymentClient;
 import com.dev.order_service.client.PaymentFeignClient;
+import com.dev.order_service.device.DeviceContext;
+import com.dev.order_service.device.DeviceViewTracker;
 import com.dev.order_service.dto.request.AddOrderItemsRequest;
 import com.dev.order_service.dto.request.CreateOrderRequest;
 import com.dev.order_service.dto.request.OrderItemRequest;
@@ -35,6 +37,8 @@ public class OrderServiceImpl implements OrderService {
     private final OrderCommandService orderCommandService;
     private final OrderRequestHasher requestHasher;
     private final PaymentClient paymentClient;
+    private final BotFlagService botFlagService;
+    private final DeviceViewTracker deviceViewTracker;
 
     // Stripe không nhận khoản USD dưới 0.50; đơn 0 đồng (vé miễn phí) chưa hỗ trợ ở P4
     private static final BigDecimal MIN_PAYABLE_AMOUNT = new BigDecimal("0.50");
@@ -42,6 +46,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderResponse create(UUID buyerId, CreateOrderRequest request, String idempotencyKey) {
         requireIdempotencyKey(idempotencyKey);
+        ensureNotBotFlagged(buyerId);
         orderCommandService.requireWithinTicketLimit(request.getItems());
         String requestHash = requestHasher.hash(request.getEventId(), null, request.getItems());
         var replay = orderCommandService.replay(buyerId, "CREATE_CART", idempotencyKey, requestHash);
@@ -99,6 +104,7 @@ public class OrderServiceImpl implements OrderService {
             UUID buyerId, UUID orderId, AddOrderItemsRequest request, String idempotencyKey
     ) {
         requireIdempotencyKey(idempotencyKey);
+        ensureNotBotFlagged(buyerId);
         orderCommandService.requireWithinTicketLimit(request.getItems());
         String operation = "ADD_ITEMS:" + orderId;
         String requestHash = requestHasher.hash(null, orderId, request.getItems());
@@ -148,6 +154,8 @@ public class OrderServiceImpl implements OrderService {
 
         ValidatedCatalog catalog = null;
         if (quantity > item.getQuantity()) {
+            // Giảm số lượng luôn được phép để buyer bị chặn vẫn tự nhả vé
+            ensureNotBotFlagged(buyerId);
             catalog = catalogValidationService.loadAndValidate(current.getEventId(), List.of(
                     new OrderItemRequest(item.getTicketTypeId(), null, quantity - item.getQuantity())
             ));
@@ -192,6 +200,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public AvailabilityResponse getAvailability(UUID eventId) {
         ValidatedCatalog catalog = catalogValidationService.loadCatalog(eventId);
+        deviceViewTracker.recordView(DeviceContext.currentDeviceHash(), eventId, Instant.now());
         if ("CANCELLED".equals(catalog.event().status())) {
             orderCommandService.cancelUnpaidOrdersForEvent(eventId);
         }
@@ -278,5 +287,11 @@ public class OrderServiceImpl implements OrderService {
         if (!StringUtils.hasText(idempotencyKey) || idempotencyKey.length() > 128) {
             throw new AppException(OrderErrorCode.IDEMPOTENCY_KEY_REQUIRED);
         }
+    }
+
+    // Kiểm tra trước khi gọi Product: request bị chặn không tốn lượt gọi catalog, hold cũ giữ nguyên (D41).
+    // Idempotency replay cũng bị chặn — chấp nhận, response cũ vẫn xem được qua OR03.
+    private void ensureNotBotFlagged(UUID buyerId) {
+        botFlagService.ensureCanAddToCart(buyerId, DeviceContext.currentDeviceHash());
     }
 }

@@ -80,7 +80,9 @@ public class OrderOutboxScheduler {
                                 rs.getObject("event_id", UUID.class),
                                 rs.getInt("item_count"),
                                 rs.getInt("quantity"),
-                                rs.getTimestamp("occurred_at").toInstant()
+                                rs.getTimestamp("occurred_at").toInstant(),
+                                null,
+                                null
                         )
                 )
         );

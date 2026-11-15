@@ -24,6 +24,9 @@ public final class KafkaTopics {
     public static final String ORDER_TICKETS_ISSUED = "order.tickets-issued";
     public static final String ORDER_REFUNDED = "order.refunded";
 
+    // bot-detection-service → order-service (P6)
+    public static final String BOT_SCORE_EVALUATED = "bot_score.evaluated";
+
     // payment-service → order-service (P4)
     public static final String PAYMENT_SUCCEEDED = "payment.succeeded";
     public static final String PAYMENT_FAILED = "payment.failed";

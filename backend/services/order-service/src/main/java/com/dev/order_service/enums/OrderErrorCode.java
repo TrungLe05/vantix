@@ -26,7 +26,10 @@ public enum OrderErrorCode implements ErrorCode {
     // 401x tiếp: vé và check-in (P5)
     TICKET_NOT_FOUND(4016, "Không tìm thấy vé cho sự kiện này", HttpStatus.NOT_FOUND),
     TICKET_ALREADY_CHECKED_IN(4017, "Vé đã được check-in trước đó", HttpStatus.CONFLICT),
-    TICKET_NOT_VALID(4018, "Vé đã bị hủy và không còn hiệu lực", HttpStatus.CONFLICT);
+    TICKET_NOT_VALID(4018, "Vé đã bị hủy và không còn hiệu lực", HttpStatus.CONFLICT),
+    // P6 — bot-detection (D41)
+    BOT_REVIEW_REQUIRED(4019, "Tài khoản hoặc thiết bị đang tạm bị chặn thêm vé để kiểm tra. Vui lòng liên hệ hỗ trợ", HttpStatus.FORBIDDEN),
+    BOT_FLAG_NOT_FOUND(4020, "Không tìm thấy cảnh báo bot", HttpStatus.NOT_FOUND);
 
     private final int code;
     private final String message;

@@ -22,13 +22,13 @@ Chính sách hoàn vé: ≥ 7 ngày trước giờ diễn hoàn 100%, 24h–7 ng
 
 ## Trạng thái
 
-P0 hạ tầng ✅ · P1 User & Auth ✅ · P2 Product ✅ · P3 Order ✅ · **P4 Payment 🟡** và **P5 Notification & check-in 🟡** đã code + integration test, chờ chạy end-to-end (Stripe test, Kafka, SMTP) · P6–P9 chưa bắt đầu. Xem [PROGRESS.md](PROGRESS.md) và [TASKS.md](TASKS.md).
+P0 hạ tầng ✅ · P1 User & Auth ✅ · P2 Product ✅ · P3 Order ✅ · **P4 Payment 🟡** và **P5 Notification & check-in 🟡** đã code + integration test, chờ chạy end-to-end (Stripe test, Kafka, SMTP) · **P6 Bot-detection 🟡** đã code, huấn luyện trên dữ liệu k6 tự tạo, có báo cáo · P7–P9 chưa bắt đầu. Xem [PROGRESS.md](PROGRESS.md) và [TASKS.md](TASKS.md).
 
 ## Stack
 
 - **Backend:** Java 21, Spring Boot 4.1, Spring Cloud 2025.1.2 (Gateway WebFlux, OpenFeign), Spring Security, JPA + Flyway, Lombok. Maven multi-module.
 - **Hạ tầng:** PostgreSQL 14 (database-per-service), Redis, Kafka 4 (KRaft), pgAdmin, Kafka UI, RedisInsight — `docker-compose.yml`.
-- **Python:** FastAPI cho `bot-detection-service` và `assistant-service` (hiện mới có `/health`).
+- **Python:** FastAPI cho `bot-detection-service` (scikit-learn Isolation Forest, aiokafka, Redis) và `assistant-service` (mới có `/health`).
 - **Frontend:** Next.js 16 (App Router), React 19, TypeScript, Tailwind 4, shadcn (base-ui), TanStack Query, Zustand, React Hook Form + Zod, Axios.
 
 ## Cấu trúc repo

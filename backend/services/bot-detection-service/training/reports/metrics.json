@@ -1,0 +1,180 @@
+{
+  "training": {
+    "train_events_before_sampling": 571,
+    "train_bot_share_before_sampling": 0.6515,
+    "train_events": 220,
+    "validation_events": 199,
+    "test_events": 768,
+    "train_bot_share": 0.0955,
+    "train_accounts": 162,
+    "test_accounts": 256,
+    "estimator": {
+      "n_estimators": 300,
+      "max_samples": "auto",
+      "contamination": "auto",
+      "random_state": 42
+    },
+    "train_bot_share_target": 0.1,
+    "threshold_rule": "high = quantile 0.99 / medium = quantile 0.95 of human anomaly scores on validation"
+  },
+  "natural_mix_variant": {
+    "thresholds": {
+      "medium": 0.559802,
+      "high": 0.567232
+    },
+    "test": {
+      "events": 768,
+      "bot_events": 491,
+      "tp": 65,
+      "fp": 9,
+      "fn": 426,
+      "precision": 0.8784,
+      "recall": 0.1324,
+      "f1": 0.2301,
+      "high_rate_by_kind": {
+        "botfarm": 0.5758,
+        "botfast": 0.0746,
+        "botviewer": 0.1979,
+        "human": 0.0325
+      }
+    },
+    "test_accounts": {
+      "humans_flagged": 9,
+      "humans": 200,
+      "by_kind": {
+        "botfarm": {
+          "accounts": 24,
+          "flagged_share": 0.625,
+          "median_adds_before_flag": 0.0
+        },
+        "botfast": {
+          "accounts": 18,
+          "flagged_share": 0.7222,
+          "median_adds_before_flag": 0.0
+        },
+        "botviewer": {
+          "accounts": 14,
+          "flagged_share": 0.6429,
+          "median_adds_before_flag": 4.0
+        },
+        "human": {
+          "accounts": 200,
+          "flagged_share": 0.045,
+          "median_adds_before_flag": 1.0
+        }
+      }
+    },
+    "roc_auc": 0.7996
+  },
+  "thresholds": {
+    "medium": 0.555752,
+    "high": 0.57581
+  },
+  "validation": {
+    "model": {
+      "events": 199,
+      "bot_events": 136,
+      "tp": 128,
+      "fp": 1,
+      "fn": 8,
+      "precision": 0.9922,
+      "recall": 0.9412,
+      "f1": 0.966,
+      "high_rate_by_kind": {
+        "botfarm": 1.0,
+        "botfast": 0.9802,
+        "botviewer": 0.7692,
+        "human": 0.0159
+      }
+    },
+    "roc_auc": 0.9939
+  },
+  "test": {
+    "model": {
+      "events": 768,
+      "bot_events": 491,
+      "tp": 458,
+      "fp": 7,
+      "fn": 33,
+      "precision": 0.9849,
+      "recall": 0.9328,
+      "f1": 0.9582,
+      "high_rate_by_kind": {
+        "botfarm": 0.7273,
+        "botfast": 0.9834,
+        "botviewer": 0.8125,
+        "human": 0.0253
+      }
+    },
+    "model_accounts": {
+      "humans_flagged": 7,
+      "humans": 200,
+      "by_kind": {
+        "botfarm": {
+          "accounts": 24,
+          "flagged_share": 0.7083,
+          "median_adds_before_flag": 0.0
+        },
+        "botfast": {
+          "accounts": 18,
+          "flagged_share": 1.0,
+          "median_adds_before_flag": 0.0
+        },
+        "botviewer": {
+          "accounts": 14,
+          "flagged_share": 1.0,
+          "median_adds_before_flag": 1.0
+        },
+        "human": {
+          "accounts": 200,
+          "flagged_share": 0.035,
+          "median_adds_before_flag": 1.0
+        }
+      }
+    },
+    "baseline_rule": {
+      "events": 768,
+      "bot_events": 491,
+      "tp": 384,
+      "fp": 0,
+      "fn": 107,
+      "precision": 1.0,
+      "recall": 0.7821,
+      "f1": 0.8777,
+      "high_rate_by_kind": {
+        "botfarm": 0.6667,
+        "botfast": 0.8508,
+        "botviewer": 0.5625,
+        "human": 0.0
+      }
+    },
+    "baseline_accounts": {
+      "humans_flagged": 0,
+      "humans": 200,
+      "by_kind": {
+        "botfarm": {
+          "accounts": 24,
+          "flagged_share": 0.625,
+          "median_adds_before_flag": 0.0
+        },
+        "botfast": {
+          "accounts": 18,
+          "flagged_share": 1.0,
+          "median_adds_before_flag": 3.0
+        },
+        "botviewer": {
+          "accounts": 14,
+          "flagged_share": 1.0,
+          "median_adds_before_flag": 3.0
+        },
+        "human": {
+          "accounts": 200,
+          "flagged_share": 0.0,
+          "median_adds_before_flag": null
+        }
+      }
+    },
+    "roc_auc": 0.988,
+    "average_precision": 0.9936
+  }
+}

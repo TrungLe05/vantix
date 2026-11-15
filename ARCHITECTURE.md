@@ -45,7 +45,7 @@ Nét liền: đã có trong code. Nét đứt: thiết kế, chưa code.
 | order-service | 9001 | `orders_service` | Giỏ, hold, tồn kho giao dịch, availability, nhận kết quả thanh toán, tính % hoàn; sau này vé/QR, check-in | Có (P3, P4) |
 | payment-service | 9002 | `payments_service` | Stripe Checkout session, webhook, refund — chỉ biết tiền | Có (P4, chưa chạy với Stripe thật) |
 | notification-service | 9000 | `notifications_service` | Consume Kafka, gửi email, WebSocket, bảng `notifications` | Có (P5) |
-| bot-detection | 9005 | — | Isolation Forest chấm điểm `cart.item_added` | Chỉ `/health` |
+| bot-detection | 9005 | — (Redis DB 2) | Isolation Forest chấm điểm `cart.item_added` | P6: consumer/producer Kafka, model offline, BD01–BD03 |
 | assistant | 9006 | — | Trợ lý LLM, stateless | Chỉ `/health` |
 
 Service Java đều có `server.servlet.context-path: /api`. Gateway route theo prefix: `/api/users/**, /api/auth/**, /api/oauth2/**, /api/login/oauth2/**` → user; `/api/events/**, /api/venues/**, /api/ticket-types/**, /api/products/**` → product; `/api/orders/**` → order; `/api/payments/**`, `/api/notifications/**`, `/api/bot-detection/**`, `/api/assistant/**`.
@@ -100,7 +100,8 @@ Redis: `otp:{purpose}:{userId}`, `otp:cooldown:{purpose}:{userId}`, `oauth:code:
 | `user.forgot-password-requested` | user | notification (P5) | Như trên |
 | `user.staff-account-created` | user | notification (P5) | Như trên — payload có mật khẩu tạm, không log |
 | `product.event-cancelled` | product | order | Transactional outbox `event_outbox`, retry 5s |
-| `cart.item_added` | order | bot-detection (P6) | Transactional outbox `order_event_outbox`, retry 5s |
+| `cart.item_added` | order | bot-detection | Outbox `order_event_outbox` (P6: payload JSON có `deviceHash`, `eventViewedAt`) |
+| `bot_score.evaluated` | bot-detection | order | Gửi sau khi chấm điểm, commit offset sau khi gửi (at-least-once) |
 | `order.refund-requested` | order | payment, notification | Outbox `order_event_outbox` (cột `topic` + `payload`) |
 | `order.tickets-issued`, `order.refunded` | order | notification | Outbox `order_event_outbox` |
 | `payment.succeeded`, `payment.failed` | payment | order | Outbox `payment_event_outbox` |
@@ -111,6 +112,8 @@ Key = id aggregate. Consumer phải idempotent vì outbox có thể phát lặp.
 Luồng tiền (P4, chi tiết `docs/payment/`): buyer gọi Order `POST /orders/{id}/checkout` → Order gọi Payment đồng bộ qua API nội bộ `/api/internal/payments/**` (không route ở Gateway) lấy link Stripe Checkout → Stripe gọi webhook `/api/payments/webhooks/stripe` (xác thực chữ ký, idempotent theo event id) → `payment.succeeded` → Order `PAID`. Tiền vào khi Order đã hết hạn/bị hủy thì hoàn 100%. Hoàn tiền: Order tính % và phát `order.refund-requested`, Payment thực thi qua Stripe.
 
 Vé và thông báo (P5, chi tiết `docs/notification/`): `payment.succeeded` → Order phát hành vé (mã ngẫu nhiên, QR sinh ở backend) và chuyển `TICKETS_ISSUED` trong cùng transaction → `order.tickets-issued` → Notification lưu `notifications`, đẩy WebSocket (ticket một lần qua `POST /api/notifications/ws-ticket`, rồi `GET /api/notifications/ws?ticket=`) và gửi email (lấy địa chỉ qua `GET /api/internal/users/{id}/contact`). Check-in `POST /api/orders/tickets/check-in` (ADMIN/STAFF) bằng update có điều kiện; quét trùng trả 4017 kèm lần quét đầu.
+
+Bot-detection (P6, chi tiết `docs/bot-detection/`): frontend gửi `X-Device-Id` (UUID ngẫu nhiên), Order chỉ giữ HMAC; availability ghi lần xem đầu; `cart.item_added` → bot-detection tính feature theo cửa sổ Redis + tuổi tài khoản (`GET /api/internal/users/{id}/account`) → Isolation Forest → `bot_score.evaluated` → Order: `HIGH` tạo `bot_flags`, các lần thêm giỏ sau của buyer/thiết bị đó bị chặn 4019 (hold cũ giữ nguyên), ADMIN gỡ ở `/api/orders/bot-flags`.
 
 ## 7. Order — chống bán trùng (P3)
 

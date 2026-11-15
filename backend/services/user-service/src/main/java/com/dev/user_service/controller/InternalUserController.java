@@ -1,6 +1,7 @@
 package com.dev.user_service.controller;
 
 import com.dev.commonlib_api_response.dto.response.ApiResponse;
+import com.dev.user_service.dto.response.UserAccountResponse;
 import com.dev.user_service.dto.response.UserContactResponse;
 import com.dev.user_service.services.UserService;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,15 @@ public class InternalUserController {
     public ApiResponse<UserContactResponse> getContact(@PathVariable UUID userId) {
         return ApiResponse.<UserContactResponse>builder()
                 .result(userService.getContact(userId))
+                .build();
+    }
+
+    // bot-detection lấy tuổi tài khoản làm feature (D39); không có email/tên
+    @GetMapping("/{userId}/account")
+    @PreAuthorize("hasRole('INTERNAL')")
+    public ApiResponse<UserAccountResponse> getAccount(@PathVariable UUID userId) {
+        return ApiResponse.<UserAccountResponse>builder()
+                .result(userService.getAccount(userId))
                 .build();
     }
 }

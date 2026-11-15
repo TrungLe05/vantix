@@ -1,6 +1,6 @@
 # Vantix — Tiến độ
 
-> Cập nhật: 14/11/2026 · nhánh `feature/notification-checkin` (P5, tách từ `feature/payment-service`). Trạng thái lấy từ code, không chỉ từ docs.
+> Cập nhật: 15/11/2026 · nhánh `feature/bot-detection` (P6, tách từ `develop` sau khi merge P4/P5). Trạng thái lấy từ code, không chỉ từ docs.
 
 ## Tổng quan
 
@@ -12,7 +12,7 @@
 | P3 | Order: giỏ, hold, chống bán trùng | ✅ Xong | 9 API + UI (có hủy giỏ CART); integration/concurrency test, E2E Playwright, k6 (đúng đắn đạt, thông lượng/event còn thấp) |
 | P4 | Payment (Stripe) | 🟡 Đã code + integration test | Stripe Checkout, webhook, hoàn tiền, UI; chưa chạy với Stripe thật, chưa có E2E |
 | P5 | Notification & check-in | 🟡 Đã code + integration test | Vé/QR, check-in chống quét trùng, thông báo + email + WebSocket, email OTP/STAFF; chưa chạy E2E với Kafka/SMTP thật |
-| P6 | Bot-detection | ⬜ Chưa bắt đầu | Chỉ `/health`; topic `cart.item_added` đã có producer |
+| P6 | Bot-detection | 🟡 Đã code + huấn luyện | Device ID, feature Redis, Isolation Forest trên dữ liệu k6 tự tạo (test offline: precision 0.985, recall 0.933, chặn nhầm 3.5% tài khoản người dùng; live: chặn nhầm 8%, botfarm 4/24), chặn 4019, trang review ADMIN; chưa E2E trình duyệt |
 | P7 | AI Assistant | ⬜ Chưa bắt đầu | Chỉ `/health` |
 | P8 | Dữ liệu cá nhân | ⬜ Chưa bắt đầu | |
 | P9 | Hoàn thiện, deploy | ⬜ Chưa bắt đầu | |
@@ -59,6 +59,16 @@
 - Frontend: mục "Your tickets" (QR + mã), chuông thông báo realtime có badge, trang `/check-in` (camera `BarcodeDetector` hoặc nhập mã).
 - Test: order 84 (thêm 9 vé/check-in), notification 14, user 18 (thêm 3).
 - Quyết định mới D31–D36 (`DECISIONS.md`).
+
+### P6 — Bot-detection
+- order-service: filter `X-Device-Id` → HMAC (`DEVICE_HASH_SECRET`), availability ghi lần xem đầu (Redis), `cart.item_added` thêm `deviceHash`/`eventViewedAt` (payload JSON của outbox); consumer `bot_score.evaluated` → bảng `bot_flags` (migration V5); OR01/OR04/OR06 chặn 4019 theo buyer/thiết bị, hold cũ giữ nguyên; OR14/OR15 ADMIN xem/gỡ.
+- bot-detection-service (trước là khung `/health`): feature theo cửa sổ Redis, tuổi tài khoản từ user-service, Isolation Forest (`model/`), consumer/producer aiokafka at-least-once, BD01–BD03; chế độ `UNSCORED` khi chưa có model.
+- user-service: `GET /internal/users/{id}/account` (role INTERNAL, chỉ `createdAt`).
+- Dữ liệu và model: `datagen/` (k6 + seed trên stack `*_e2e`), `training/` (dataset, train, notebook), báo cáo `docs/bot-detection/P6_bot_detection_report.md`.
+- Frontend: header `X-Device-Id`, trang chi tiết gọi availability ("N left"), trang admin "Bot review".
+- CI: job `bot-detection` (pytest, Python 3.12, Redis).
+- Test: order 91 (thêm 7), user 19 (thêm 1), bot-detection 17 (pytest).
+- Quyết định mới D37–D42 (`DECISIONS.md`).
 
 ## Đồng bộ tài liệu (13/11/2026)
 

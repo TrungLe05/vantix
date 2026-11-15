@@ -1,0 +1,51 @@
+{
+  "version": "iforest-20261114",
+  "features": [
+    "buyer_adds_1m",
+    "buyer_adds_10m",
+    "device_adds_1m",
+    "secs_since_prev_add",
+    "device_accounts_24h",
+    "account_age_hours",
+    "viewed_event",
+    "secs_since_view",
+    "quantity",
+    "item_count",
+    "buyer_events_1h",
+    "has_device"
+  ],
+  "thresholds": {
+    "medium": 0.555752,
+    "high": 0.57581
+  },
+  "imputations": {
+    "account_age_hours": 326.41099999999994
+  },
+  "trained_at": "2026-11-14T17:44:48+00:00",
+  "training": {
+    "train_events_before_sampling": 571,
+    "train_bot_share_before_sampling": 0.6515,
+    "train_events": 220,
+    "validation_events": 199,
+    "test_events": 768,
+    "train_bot_share": 0.0955,
+    "train_accounts": 162,
+    "test_accounts": 256,
+    "estimator": {
+      "n_estimators": 300,
+      "max_samples": "auto",
+      "contamination": "auto",
+      "random_state": 42
+    },
+    "train_bot_share_target": 0.1,
+    "threshold_rule": "high = quantile 0.99 / medium = quantile 0.95 of human anomaly scores on validation"
+  },
+  "metrics": {
+    "test": {
+      "roc_auc": 0.988,
+      "average_precision": 0.9936,
+      "precision": 0.9849,
+      "recall": 0.9328
+    }
+  }
+}

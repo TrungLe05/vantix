@@ -44,7 +44,7 @@ import {
   updateOrderItemQuantity,
 } from "@/lib/api/orders";
 import { getErrorMessage } from "@/lib/api/client";
-import type { OrderTicket } from "@/types/orders";
+import type { OrderTicket, RefundQuote } from "@/types/orders";
 
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -168,6 +168,19 @@ function CartSkeleton() {
       <span className="sr-only">Loading your tickets</span>
     </div>
   );
+}
+
+function refundUnavailableMessage(reason: RefundQuote["reason"]) {
+  switch (reason) {
+    case "ALL_TICKETS_USED":
+      return "All tickets in this order have already been used at the entrance, so it cannot be refunded.";
+    case "ALREADY_REFUNDED":
+      return "A refund for this order has already been requested.";
+    case "NOT_PAID":
+      return "This order has not been paid, so there is nothing to refund.";
+    default:
+      return "This order can no longer be refunded because the event starts in less than 24 hours.";
+  }
 }
 
 export default function OrderCartPage() {
@@ -973,15 +986,22 @@ export default function OrderCartPage() {
                   {money.format(refundQuoteQuery.data.amount)}
                 </span>
               </div>
+              {refundQuoteQuery.data.usedTickets > 0 ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {refundQuoteQuery.data.usedTickets} ticket
+                  {refundQuoteQuery.data.usedTickets === 1 ? " was" : "s were"} already
+                  used at the entrance and cannot be refunded. This refund covers
+                  the other {refundQuoteQuery.data.refundableTickets}.
+                </p>
+              ) : null}
               <p className="mt-2 text-xs text-muted-foreground">
-                Your tickets are released immediately and this cannot be
+                Unused tickets are released immediately and this cannot be
                 undone. The final amount is calculated when you confirm.
               </p>
             </div>
           ) : (
             <p role="status" className="text-sm text-muted-foreground">
-              This order can no longer be refunded because the event starts in
-              less than 24 hours.
+              {refundUnavailableMessage(refundQuoteQuery.data.reason)}
             </p>
           )}
           <DialogFooter>

@@ -24,6 +24,8 @@ import {
 import { getEvent } from "@/lib/api/events";
 import { getErrorMessage } from "@/lib/api/client";
 import { createOrder, getAvailability } from "@/lib/api/orders";
+import { loginRedirectPath } from "@/lib/auth-redirect";
+import { useAuthStore } from "@/store/auth-store";
 import type { TicketType } from "@/types/events";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -53,6 +55,7 @@ export default function EventDetailPage() {
   const remainingByType = new Map(
     availability.data?.ticketTypes.map((type) => [type.ticketTypeId, type.availableQuantity]) ?? [],
   );
+  const isLoggedIn = useAuthStore((state) => Boolean(state.accessToken));
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const createCart = useMutation({
@@ -315,7 +318,16 @@ export default function EventDetailPage() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => { setCheckoutError(null); createCart.mutate(); }}
+                    onClick={() => {
+                      if (!isLoggedIn) {
+                        // Thông báo rồi mới chuyển trang: giữ vé cần tài khoản (thay cho lỗi "thiếu access token")
+                        setCheckoutError("Please log in to hold tickets. Taking you to the login page…");
+                        window.setTimeout(() => router.push(loginRedirectPath(`/events/${params.eventId}`)), 1200);
+                        return;
+                      }
+                      setCheckoutError(null);
+                      createCart.mutate();
+                    }}
                     disabled={selectedGaCount === 0 || createCart.isPending}
                     className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
                   >

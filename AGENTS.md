@@ -78,7 +78,7 @@ Mọi service Java có `server.servlet.context-path: /api` → `@RequestMapping`
 
 ## Phase hiện tại
 - P0 hạ tầng, P1 User & Auth (`docs/auth/`), P2 Product (`docs/product/`), P3 Order (`docs/order/`): xong, có integration test; P3 có thêm E2E Playwright và k6.
-- P4 Payment (`docs/payment/`), P5 Notification & check-in (`docs/notification/`): đã code + integration test, chưa chạy với Stripe test/Kafka/SMTP thật.
+- P4 Payment (`docs/payment/`), P5 Notification & check-in (`docs/notification/`): đã code + integration test; Stripe test mode đã chạy thật (thanh toán, hết hạn, hoàn tiền), P5 đã E2E Kafka + WebSocket + SMTP sink local; chưa gửi qua SMTP thật có TLS.
 - P6 Bot-detection (`docs/bot-detection/`): đã code, huấn luyện trên dữ liệu k6 tự tạo, chính sách chặn D46; chưa E2E trình duyệt.
 - P7–P9 chưa bắt đầu. Roadmap: `docs/00_roadmap_phases_v1.md`; tiến độ chi tiết: `PROGRESS.md`; backlog: `TASKS.md`.
 - Việc treo: OTP xác thực thiết bị mới (D19, P6 không cần, vẫn mở).

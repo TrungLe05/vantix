@@ -10,8 +10,8 @@
 | P1 | User & Auth | ✅ Xong | 14 API (gồm tạo STAFF), API nội bộ contact/account (P5, P6); 19 integration test (OTP, refresh rotation) |
 | P2 | Product (catalog) | ✅ Xong | 14 API (PR01–PR14), venue có tọa độ (D45); 20 integration test; Compose tự tạo DB |
 | P3 | Order: giỏ, hold, chống bán trùng | ✅ Xong | 9 API + UI (có hủy giỏ CART); integration/concurrency test, E2E Playwright, k6 (đúng đắn đạt, thông lượng/event còn thấp) |
-| P4 | Payment (Stripe) | 🟡 Đã code + integration test | Stripe Checkout, webhook, hoàn tiền, UI; chưa chạy với Stripe thật, chưa có E2E |
-| P5 | Notification & check-in | 🟡 Đã code + integration test | Vé/QR, check-in chống quét trùng, thông báo + email + WebSocket, email OTP/STAFF; chưa chạy E2E với Kafka/SMTP thật |
+| P4 | Payment (Stripe) | 🟡 Đã code + integration test + chạy Stripe test mode | Stripe Checkout, webhook, hoàn tiền, UI; đã chạy thật thanh toán/hết hạn/hoàn tiền với Stripe sandbox (15/11/2026); chưa có E2E Playwright cho UI |
+| P5 | Notification & check-in | 🟡 Đã code + integration test + E2E Kafka/WebSocket | Vé/QR, check-in chống quét trùng, thông báo + email + WebSocket, email OTP/STAFF; E2E Kafka + WebSocket qua Gateway + SMTP sink local đạt (15/11/2026); chưa gửi qua SMTP thật có TLS, chưa kiểm tra UI |
 | P6 | Bot-detection | 🟡 Đã code + huấn luyện | Device ID, feature Redis, Isolation Forest trên dữ liệu k6 tự tạo (test offline: precision 0.985, recall 0.933, chặn nhầm 3.5% tài khoản người dùng; live vòng C chấm lại sạch: ~1% người dùng bị flag — con số 8% ban đầu do lỗi dữ liệu k6), chính sách D46 (chặn khi HIGH kèm luật hoặc lặp lại, HIGH đơn lẻ → WATCH: test B chặn nhầm 0/200), chặn 4019, trang review ADMIN; chưa E2E trình duyệt |
 | P7 | AI Assistant | ⬜ Chưa bắt đầu | Chỉ `/health` |
 | P8 | Dữ liệu cá nhân | ⬜ Chưa bắt đầu | |
@@ -80,7 +80,9 @@
 
 - **BLOCKED — Chạy thật Stripe test mode** (và kéo theo **E2E Kafka/SMTP**, vì email "đặt vé" cần thanh toán Stripe). Đã xác nhận: Stripe CLI đăng nhập được, secret của `stripe listen` khớp `STRIPE_WEBHOOK_SECRET`, key là `sk_test_`. Vướng: cả stack dev của chủ repo đang chạy trên cổng 3000/8999/9000–9004 nên stack riêng (DB `*_e2e`) không khởi động được; dùng stack dev thì phải tạo tài khoản/đơn test trong DB dev đang dùng, webhook đi vào payment-service dev, Kafka dùng chung. **Câu hỏi:** chạy thử trên stack dev đang chạy (tạo một buyer test trong `users_service`, đơn test trong DB dev) được không, hay tắt stack dev để chạy stack riêng trên DB `*_e2e`? **Đã trả lời (15/11/2026):** chủ repo tắt stack dev, chạy stack riêng trên DB `*_e2e` — task chờ chạy, chưa có kết quả.
 - **DONE — Giảm chặn nhầm bot-detection** (D46): đọc lại `bot_score.evaluated` vòng C từ Kafka và tái hiện offline → 11/12 feature khớp, riêng `device_accounts_24h` lệch do UUID thiết bị "gia đình"/"farm" của k6 trùng giữa lần chạy thử và lần chạy live (Redis giữ 24 giờ) → chặn nhầm thật ~1% chứ không phải 8%; "botfarm 4/24" là 20 tài khoản bị chặn theo thiết bị trước khi có bản tin. Sửa `datagen/traffic.js` (mã riêng mỗi lần chạy). Chính sách mới: HIGH kèm luật tay (`ruleMatched`) → chặn; HIGH đơn lẻ → `WATCH`, HIGH lần hai → chặn (order migration V6, bot-detection thêm `ruleMatched`, trang Bot review có bộ lọc Watching). Test B: người dùng bị chặn 7/200 → 0/200, bot 49/56 → 47/56. Script `training/evaluate_policy.py`. Test: order 97, pytest 18.
-- **Bước tiếp theo:** khi stack dev đã tắt, chạy Stripe test mode trên stack `*_e2e` (thanh toán, hết hạn, hoàn tiền) để mở hai task BLOCKED; còn lại theo thứ tự ưu tiên 🟠 trong `TASKS.md` (Playwright/kiểm tra trình duyệt, ESLint bỏ qua `.open-next`, …).
+- **DONE — Chạy thật Stripe test mode** (15/11/2026, stack `*_e2e`, Stripe CLI `listen`): hết hạn (scheduler expire phiên đúng deadline hold → Order `EXPIRED`), thanh toán thẻ 4242 (webhook `checkout.session.completed` → 80.00 USD `SUCCEEDED` → `TICKETS_ISSUED`, 2 vé), hoàn tiền OR11 (100% → Stripe Refund → `refund.updated` → `REFUNDED`, vé `VOID`, nhả kho) đều đạt. Phát hiện: Checkout hiển thị VND do Adaptive Pricing của tài khoản sandbox (ghi nhận vẫn đúng USD); consumer group test mới đọc lại bản tin dev từ offset 0 (không hỏng dữ liệu). Chi tiết `docs/reports/2026-11-15-stripe-test-mode.md`.
+- **DONE — E2E P5 Kafka/SMTP/WebSocket** (15/11/2026, cùng stack + notification-service, SMTP sink local): email OTP đăng ký, OTP quên mật khẩu, mật khẩu tạm STAFF (`mustChangePassword`, 9004 ngoài allowlist), vé đã phát hành và hai email hoàn tiền đều tới sink; WebSocket qua Gateway nhận 3 frame (~1–1,6 giây sau webhook Stripe); `notifications` 3 dòng `SENT`. Chưa: SMTP thật có auth/STARTTLS, UI trình duyệt. Chi tiết `docs/reports/2026-11-15-p5-e2e-kafka-smtp.md`.
+- **Bước tiếp theo:** còn lại theo thứ tự ưu tiên 🟠 trong `TASKS.md` (Playwright/kiểm tra trình duyệt, ESLint bỏ qua `.open-next`, …).
 
 ## Đồng bộ tài liệu (13/11/2026)
 
@@ -97,9 +99,9 @@
 ## Rủi ro / nợ kỹ thuật
 
 - 181 test tự động backend + 18 pytest bot-detection (unit + integration trên Postgres/Redis thật, CI dùng service container); E2E Playwright cho P1–P3, chưa có cho thanh toán/vé/bot review.
-- P4 chưa chạy với Stripe thật: lớp gọi SDK (`StripeSdkGateway`) mới được biên dịch, logic được test với Stripe giả lập.
+- P4 đã chạy thật với Stripe test mode (thanh toán, hết hạn, hoàn 100%); hoàn 50%/0%, `refund.failed` thật và thanh toán async chưa chạy với Stripe thật.
 - Refund `FAILED` phải xử lý tay (log `REFUND_FAILED`); chưa có API quản trị.
-- P5 chưa chạy end-to-end (Kafka + SMTP thật, WebSocket qua Gateway, camera trên thiết bị thật). Dev không có SMTP thì email OTP bị bỏ qua (`EMAIL_SKIPPED`), cần cấu hình `MAIL_HOST` để đăng ký tài khoản mới.
+- P5 đã chạy E2E Kafka + WebSocket qua Gateway + SMTP sink local; chưa gửi qua SMTP thật có auth/TLS, chưa thử camera trên thiết bị thật. Dev không có SMTP thì email OTP bị bỏ qua (`EMAIL_SKIPPED`), cần cấu hình `MAIL_HOST` để đăng ký tài khoản mới.
 - Phiên WebSocket và ticket nằm trong bộ nhớ notification-service: chỉ đúng với một instance (P9).
 - Outbox Product/Order đã có backoff + dead-letter + gauge (D25), chưa có rule alert (P9); user-service vẫn có thể mất event Kafka (không dùng outbox).
 - Đã gỡ log nhạy cảm (fingerprint JWT secret, message DB chứa giá trị vi phạm, message JJWT, message lỗi OAuth2); secret có thể đã xuất hiện trong log dev cũ.

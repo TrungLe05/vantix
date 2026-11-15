@@ -45,7 +45,7 @@ Tên DB lấy từ `application.yaml` của từng service. Service Java có con
 - Venue bắt buộc tọa độ chọn từ OpenStreetMap (D45).
 
 ## Phase
-P0 hạ tầng, P1 User & Auth, P2 Product, P3 Order: xong (có integration test; P3 có E2E Playwright + k6). P4 Payment, P5 Notification & check-in: đã code + integration test, chưa chạy với Stripe/Kafka/SMTP thật. P6 Bot-detection: đã code + huấn luyện, chưa E2E trình duyệt. P7 Assistant → P8 Dữ liệu cá nhân → P9 Hoàn thiện: chưa bắt đầu. Danh sách quyết định đủ: `DECISIONS.md` (D1–D46).
+P0 hạ tầng, P1 User & Auth, P2 Product, P3 Order: xong (có integration test; P3 có E2E Playwright + k6). P4 Payment, P5 Notification & check-in: đã code + integration test; Stripe test mode đã chạy thật (15/11/2026), P5 đã E2E Kafka + WebSocket + SMTP sink local (chưa SMTP thật có TLS). P6 Bot-detection: đã code + huấn luyện, chưa E2E trình duyệt. P7 Assistant → P8 Dữ liệu cá nhân → P9 Hoàn thiện: chưa bắt đầu. Danh sách quyết định đủ: `DECISIONS.md` (D1–D46).
 
 ## P1 — tóm tắt thiết kế
 - Access/refresh token đều là JWT (claim `token_type`); refresh rotation + reuse detection theo `family_id`, DB lưu SHA-256 hash. Refresh token đi bằng cookie httpOnly `Path=/api/auth`.

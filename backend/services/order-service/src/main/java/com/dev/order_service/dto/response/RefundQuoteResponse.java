@@ -18,4 +18,9 @@ public class RefundQuoteResponse {
     private String currency;
     private BigDecimal paidAmount;
     private Instant eventStartAt;
+    // D43: lý do khi refundable = false (NOT_PAID | ALREADY_REFUNDED | TOO_CLOSE_TO_EVENT | ALL_TICKETS_USED)
+    private String reason;
+    // Vé chưa dùng sẽ được hoàn / vé đã check-in (không hoàn)
+    private int refundableTickets;
+    private int usedTickets;
 }

@@ -80,7 +80,7 @@ public abstract class AbstractOrderIT {
                     "ACTIVE", new ProductCatalog.TicketBrief(seatedTypeId, "VIP", SEAT_PRICE)));
         }
         when(productCatalogClient.getEvent(eventId)).thenReturn(new ProductCatalog(eventId, "PUBLISHED",
-                eventStartAt, Instant.now().minus(1, ChronoUnit.DAYS), Instant.now().plus(1, ChronoUnit.DAYS), true,
+                eventStartAt, eventStartAt.plus(3, ChronoUnit.HOURS), Instant.now().minus(1, ChronoUnit.DAYS), Instant.now().plus(1, ChronoUnit.DAYS), true,
                 List.of(new ProductCatalog.TicketType(seatedTypeId, "SEATED", "VIP", SEAT_PRICE, seats),
                         new ProductCatalog.TicketType(gaTypeId, "GENERAL_ADMISSION", "GA", GA_PRICE, gaCapacity))));
         when(productCatalogClient.getSeatMap(eventId))

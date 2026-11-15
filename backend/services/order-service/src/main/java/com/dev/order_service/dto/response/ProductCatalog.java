@@ -13,6 +13,8 @@ public record ProductCatalog(
         String status,
         // Giờ bắt đầu sự kiện: mốc tính % hoàn vé (D16)
         Instant startAt,
+        // Giờ kết thúc: hết khung check-in (D44)
+        Instant endAt,
         Instant salesStartAt,
         Instant salesEndAt,
         boolean hasSeatMap,

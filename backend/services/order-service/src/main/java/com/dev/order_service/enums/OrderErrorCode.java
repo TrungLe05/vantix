@@ -29,7 +29,9 @@ public enum OrderErrorCode implements ErrorCode {
     TICKET_NOT_VALID(4018, "Vé đã bị hủy và không còn hiệu lực", HttpStatus.CONFLICT),
     // P6 — bot-detection (D41)
     BOT_REVIEW_REQUIRED(4019, "Tài khoản hoặc thiết bị đang tạm bị chặn thêm vé để kiểm tra. Vui lòng liên hệ hỗ trợ", HttpStatus.FORBIDDEN),
-    BOT_FLAG_NOT_FOUND(4020, "Không tìm thấy cảnh báo bot", HttpStatus.NOT_FOUND);
+    BOT_FLAG_NOT_FOUND(4020, "Không tìm thấy cảnh báo bot", HttpStatus.NOT_FOUND),
+    // D44 — chỉ quét vé từ 3 giờ trước giờ bắt đầu tới khi sự kiện kết thúc
+    CHECK_IN_NOT_OPEN(4021, "Chưa tới hoặc đã qua giờ check-in của sự kiện này", HttpStatus.CONFLICT);
 
     private final int code;
     private final String message;

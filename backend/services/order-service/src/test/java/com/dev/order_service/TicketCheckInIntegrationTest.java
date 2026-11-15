@@ -223,14 +223,59 @@ class TicketCheckInIntegrationTest extends AbstractOrderIT {
     }
 
     @Test
-    void orderWithACheckedInTicketCannotBeRefundedButEventCancellationStillRefunds() {
+    void buyerRefundCoversOnlyUnusedTicketsAndKeepsUsedSeatsSold() {
+        UUID buyer = UUID.randomUUID();
+        OrderResponse order = paidOrder(buyer, seat(0), seat(1), ga(2));
+        // Dùng 1 ghế và 1 vé GA: còn 1 ghế + 1 GA chưa dùng
+        UUID usedSeat = order.getTickets().stream().filter(t -> t.getSeatLabel() != null && t.getSeatLabel().endsWith("01"))
+                .findFirst().orElseThrow().getId();
+        order.getTickets().stream().filter(t -> t.getId().equals(usedSeat)).forEach(
+                t -> ticketService.checkIn(UUID.randomUUID(), eventId, t.getCode()));
+        order.getTickets().stream().filter(t -> t.getSeatLabel() == null).findFirst().ifPresent(
+                t -> ticketService.checkIn(UUID.randomUUID(), eventId, t.getCode()));
+
+        var quote = orderService.getRefundQuote(buyer, order.getId());
+        assertThat(quote.isRefundable()).isTrue();
+        assertThat(quote.getReason()).isNull();
+        assertThat(quote.getRefundableTickets()).isEqualTo(2);
+        assertThat(quote.getUsedTickets()).isEqualTo(2);
+        // 30 ngày trước sự kiện → 100% của (1 ghế + 1 GA)
+        assertThat(quote.getAmount()).isEqualByComparingTo(SEAT_PRICE.add(GA_PRICE));
+
+        orderService.requestRefund(buyer, order.getId());
+        assertThat(orderStatus(order.getId())).isEqualTo("REFUND_PENDING");
+        assertThat(jdbc.queryForObject("SELECT amount FROM order_refunds WHERE order_id = ?", BigDecimal.class,
+                order.getId())).isEqualByComparingTo(SEAT_PRICE.add(GA_PRICE));
+        // Ghế đã có người ngồi vẫn bán; ghế chưa dùng trả về kho; GA chỉ nhả 1 vé
+        assertThat(activeSeatHolds(seatIds.get(0))).isEqualTo(1);
+        assertThat(activeSeatHolds(seatIds.get(1))).isZero();
+        assertThat(jdbc.queryForObject("SELECT sold_quantity FROM ticket_inventory WHERE ticket_type_id = ?",
+                Integer.class, gaTypeId)).isEqualTo(1);
+        assertThat(orderService.getOrder(buyer, order.getId()).getTickets())
+                .extracting(TicketResponse::getStatus)
+                .containsExactlyInAnyOrder(TicketStatus.CHECKED_IN, TicketStatus.CHECKED_IN,
+                        TicketStatus.VOID, TicketStatus.VOID);
+    }
+
+    @Test
+    void quoteExplainsWhyAnOrderCannotBeRefunded() {
+        UUID buyer = UUID.randomUUID();
+        OrderResponse allUsed = paidOrder(buyer, ga(1));
+        ticketService.checkIn(UUID.randomUUID(), eventId, allUsed.getTickets().get(0).getCode());
+        var quote = orderService.getRefundQuote(buyer, allUsed.getId());
+        assertThat(quote.isRefundable()).isFalse();
+        assertThat(quote.getReason()).isEqualTo("ALL_TICKETS_USED");
+        assertError(() -> orderService.requestRefund(buyer, allUsed.getId()), 4015);
+
+        OrderResponse cart = createCart(buyer, key(), seat(2));
+        assertThat(orderService.getRefundQuote(buyer, cart.getId()).getReason()).isEqualTo("NOT_PAID");
+    }
+
+    @Test
+    void eventCancellationRefundsEverythingEvenWithCheckedInTickets() {
         UUID buyer = UUID.randomUUID();
         OrderResponse order = paidOrder(buyer, ga(2));
         ticketService.checkIn(UUID.randomUUID(), eventId, order.getTickets().get(0).getCode());
-
-        assertThat(orderService.getRefundQuote(buyer, order.getId()).isRefundable()).isFalse();
-        assertError(() -> orderService.requestRefund(buyer, order.getId()), 4015);
-        assertThat(orderStatus(order.getId())).isEqualTo("TICKETS_ISSUED");
 
         // ADMIN hủy event: vẫn hoàn 100% (D16); vé đã check-in giữ làm lịch sử, vé còn lại VOID
         orderCommandService.cancelUnpaidOrdersForEvent(eventId);
@@ -239,6 +284,8 @@ class TicketCheckInIntegrationTest extends AbstractOrderIT {
         assertThat(orderService.getOrder(buyer, order.getId()).getTickets())
                 .extracting(TicketResponse::getStatus)
                 .containsExactlyInAnyOrder(TicketStatus.CHECKED_IN, TicketStatus.VOID);
+        assertThat(jdbc.queryForObject("SELECT amount FROM order_refunds WHERE order_id = ?", BigDecimal.class,
+                order.getId())).isEqualByComparingTo(GA_PRICE.multiply(BigDecimal.valueOf(2)));
     }
 
     // ---------- helpers ----------

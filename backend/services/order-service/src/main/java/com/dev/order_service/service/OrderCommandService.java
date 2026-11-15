@@ -23,6 +23,9 @@ import com.dev.order_service.enums.HoldStatus;
 import com.dev.order_service.entity.IdempotencyRecord;
 import com.dev.order_service.entity.Order;
 import com.dev.order_service.entity.OrderItem;
+import com.dev.order_service.dto.response.TicketResponse;
+import com.dev.order_service.enums.TicketStatus;
+import java.util.Map;
 import com.dev.order_service.enums.OrderItemStatus;
 import com.dev.order_service.enums.OrderStatus;
 import com.dev.order_service.entity.TicketInventory;
@@ -404,8 +407,8 @@ public class OrderCommandService {
         if (!PAID_ORDER_STATUSES.contains(order.getStatus()) || percent <= 0) {
             throw new AppException(OrderErrorCode.REFUND_NOT_ALLOWED);
         }
-        // Đã có người vào cổng bằng vé của đơn: không hoàn (hoàn cả đơn, D29)
-        if (ticketService.hasCheckedInTickets(order.getId())) {
+        // D43: vé đã check-in không bao giờ được hoàn; còn vé chưa dùng thì hoàn phần đó
+        if (computeRefundBase(order).unusedTickets() == 0) {
             throw new AppException(OrderErrorCode.REFUND_NOT_ALLOWED);
         }
         refundPaidOrder(order, RefundReason.BUYER_REQUEST, percent);
@@ -456,14 +459,33 @@ public class OrderCommandService {
 
     // Gọi khi đã khóa Order đang PAID: trả vé về kho ngay (buyer đã từ bỏ vé / event đã hủy) rồi
     // ghi yêu cầu hoàn; việc chuyển tiền do Payment làm bất đồng bộ.
+    /**
+     * Hủy cả đơn đã thanh toán. Buyer tự hủy khi đã có vé check-in (D43): chỉ hoàn và nhả tồn kho của vé
+     * chưa dùng — ghế đã có người ngồi không được trả về kho để bán lại. ADMIN hủy event (D16) vẫn hoàn
+     * 100% toàn đơn kể cả vé đã dùng.
+     */
     private void refundPaidOrder(Order order, RefundReason reason, int percent) {
         Instant now = Instant.now();
+        boolean onlyUnused = reason == RefundReason.BUYER_REQUEST && ticketService.hasCheckedInTickets(order.getId());
+        Map<UUID, Integer> validByItem = onlyUnused ? ticketService.validTicketsByItem(order.getId()) : Map.of();
+        BigDecimal base = onlyUnused ? computeRefundBase(order).unusedAmount() : order.getTotalAmount();
         for (Hold hold : holdRepository.findActiveByOrderIdForUpdate(order.getId(), List.of(HoldStatus.PURCHASED))) {
+            int release = onlyUnused
+                    ? Math.min(hold.getQuantity(), validByItem.getOrDefault(hold.getOrderItemId(), 0))
+                    : hold.getQuantity();
+            if (release == 0) {
+                continue;
+            }
             if (hold.getSeatId() == null
-                    && ticketInventoryRepository.releaseSold(hold.getTicketTypeId(), hold.getQuantity(), now) != 1) {
+                    && ticketInventoryRepository.releaseSold(hold.getTicketTypeId(), release, now) != 1) {
                 log.error("Could not release sold GA inventory: holdId={}, ticketTypeId={}, quantity={}",
-                        hold.getId(), hold.getTicketTypeId(), hold.getQuantity());
+                        hold.getId(), hold.getTicketTypeId(), release);
                 throw new AppException(OrderErrorCode.EVENT_INVENTORY_NOT_READY);
+            }
+            if (release < hold.getQuantity()) {
+                // GA còn vé đã dùng: hold giữ PURCHASED với số lượng còn lại
+                hold.setQuantity(hold.getQuantity() - release);
+                continue;
             }
             hold.setStatus(HoldStatus.RELEASED);
             orderItemRepository.findByIdAndOrderId(hold.getOrderItemId(), order.getId())
@@ -473,7 +495,41 @@ public class OrderCommandService {
         ticketService.voidValidTickets(order.getId());
         order.setStatus(OrderStatus.REFUND_PENDING);
         orderRepository.save(order);
-        createRefund(order, reason, percent, RefundPolicy.amount(order.getTotalAmount(), percent));
+        createRefund(order, reason, percent, RefundPolicy.amount(base, percent));
+    }
+
+    /** Vé chưa dùng / đã dùng và giá trị vé chưa dùng của đơn (giá snapshot của order item). */
+    public record RefundBase(int unusedTickets, int usedTickets, BigDecimal unusedAmount) {
+    }
+
+    @Transactional(readOnly = true)
+    public RefundBase refundBase(UUID orderId) {
+        return orderRepository.findById(orderId).map(this::computeRefundBase)
+                .orElseThrow(() -> new AppException(OrderErrorCode.ORDER_NOT_FOUND));
+    }
+
+    private RefundBase computeRefundBase(Order order) {
+        List<TicketResponse> tickets = ticketService.getTickets(order.getId());
+        if (tickets.isEmpty()) {
+            // Đơn P4 chưa phát hành vé: coi như cả đơn chưa dùng
+            return new RefundBase(1, 0, order.getTotalAmount());
+        }
+        Map<UUID, BigDecimal> priceByType = new java.util.HashMap<>();
+        for (OrderItem item : orderItemRepository.findByOrderIdOrderByCreatedAtAsc(order.getId())) {
+            priceByType.putIfAbsent(item.getTicketTypeId(), item.getUnitPriceSnapshot());
+        }
+        int unused = 0;
+        int used = 0;
+        BigDecimal amount = BigDecimal.ZERO;
+        for (TicketResponse ticket : tickets) {
+            if (ticket.getStatus() == TicketStatus.VALID) {
+                unused++;
+                amount = amount.add(priceByType.getOrDefault(ticket.getTicketTypeId(), BigDecimal.ZERO));
+            } else if (ticket.getStatus() == TicketStatus.CHECKED_IN) {
+                used++;
+            }
+        }
+        return new RefundBase(unused, used, amount);
     }
 
     // Idempotent theo Order: uq_order_refunds_order_id là lớp chặn cuối, check ở đây để không ném lỗi

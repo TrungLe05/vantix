@@ -47,6 +47,7 @@ public class TicketService {
     private final TicketRepository ticketRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderRepository orderRepository;
+    private final CheckInWindowPolicy checkInWindowPolicy;
 
     /**
      * Gọi trong transaction đã khóa Order và đã chuyển hold sang PURCHASED. Ghế = 1 vé, GA số lượng
@@ -85,6 +86,17 @@ public class TicketService {
                 ticket.setStatus(TicketStatus.VOID);
             }
         }
+    }
+
+    /** Số vé VALID theo order item: hoàn một phần chỉ nhả tồn kho của vé chưa dùng (D43). */
+    public Map<UUID, Integer> validTicketsByItem(UUID orderId) {
+        Map<UUID, Integer> counts = new java.util.HashMap<>();
+        for (Ticket ticket : ticketRepository.findByOrderIdOrderByCreatedAtAscIdAsc(orderId)) {
+            if (ticket.getStatus() == TicketStatus.VALID) {
+                counts.merge(ticket.getOrderItemId(), 1, Integer::sum);
+            }
+        }
+        return counts;
     }
 
     public boolean hasCheckedInTickets(UUID orderId) {
@@ -126,7 +138,9 @@ public class TicketService {
     @Transactional
     public CheckInResponse checkIn(UUID staffId, UUID eventId, String rawCode) {
         String code = rawCode.trim();
-        if (ticketRepository.checkIn(code, eventId, staffId, Instant.now()) == 1) {
+        Instant now = Instant.now();
+        checkInWindowPolicy.requireOpen(eventId, now);
+        if (ticketRepository.checkIn(code, eventId, staffId, now) == 1) {
             Ticket ticket = ticketRepository.findByCode(code)
                     .orElseThrow(() -> new IllegalStateException("Vé vừa check-in không đọc lại được"));
             log.info("Check-in thành công ticketId={} orderId={} staffId={}", ticket.getId(), ticket.getOrderId(), staffId);

@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Mapping
 
-from app.features import FeatureStore, compute_features, parse_cart_event
+from app.features import FeatureStore, compute_features, parse_cart_event, rule_matched
 from app.model import ModelBundle
 
 # Trả epoch ms lúc tạo tài khoản, hoặc None khi user không tồn tại. Lỗi tạm thời phải ném ra để retry.
@@ -47,6 +47,8 @@ async def evaluate(
         "anomalyScore": anomaly,
         "riskLevel": level,
         "modelVersion": version,
+        # D46: Order chặn ngay khi HIGH kèm luật; HIGH không kèm luật chỉ theo dõi tới lần HIGH thứ hai
+        "ruleMatched": rule_matched(features),
         "features": features,
         "occurredAt": _iso(event.occurred_at_ms),
         "evaluatedAt": _iso(clock()),

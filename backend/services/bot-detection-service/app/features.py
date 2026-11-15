@@ -17,6 +17,10 @@ TEN_MINUTES_MS = 10 * MINUTE_MS
 HOUR_MS = 60 * MINUTE_MS
 DAY_MS = 24 * HOUR_MS
 
+# D46: luật tay kèm điểm model — HIGH chỉ chặn ngay khi một trong hai tín hiệu dồn dập này cũng đúng
+RULE_BUYER_ADDS_1M = 4
+RULE_DEVICE_ACCOUNTS_24H = 4
+
 PREV_ADD_CAP_SECONDS = 3600.0
 VIEW_GAP_CAP_SECONDS = 1800.0
 ACCOUNT_AGE_CAP_HOURS = 24.0 * 365
@@ -264,6 +268,14 @@ class RedisFeatureStore:
             device_accounts_24h=device_accounts,
             buyer_events_1h=int(results[8]),
         )
+
+
+def rule_matched(features: Mapping[str, float | None]) -> bool:
+    """Thêm giỏ dồn dập theo tài khoản hoặc nhiều tài khoản trên một thiết bị (luật tay so sánh ở báo cáo P6)."""
+    adds = features.get("buyer_adds_1m") or 0.0
+    accounts = features.get("device_accounts_24h") or 0.0
+    has_device = (features.get("has_device") or 0.0) >= 1.0
+    return adds >= RULE_BUYER_ADDS_1M or (has_device and accounts >= RULE_DEVICE_ACCOUNTS_24H)
 
 
 def to_vector(features: Mapping[str, float | None], imputations: Mapping[str, float]) -> list[float]:

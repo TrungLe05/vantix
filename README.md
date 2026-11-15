@@ -22,7 +22,7 @@ Chính sách hoàn vé: ≥ 7 ngày trước giờ diễn hoàn 100%, 24h–7 ng
 
 ## Trạng thái
 
-P0 hạ tầng ✅ · P1 User & Auth ✅ · P2 Product ✅ · P3 Order ✅ · **P4 Payment 🟡** và **P5 Notification & check-in 🟡** đã code + integration test, chờ chạy end-to-end (Stripe test, Kafka, SMTP) · **P6 Bot-detection 🟡** đã code, huấn luyện trên dữ liệu k6 tự tạo, có báo cáo và chính sách chặn D46 · P7–P9 chưa bắt đầu. Test: backend 181, bot-detection 18 (pytest), Playwright cho P1–P3. Xem [PROGRESS.md](PROGRESS.md) và [TASKS.md](TASKS.md).
+P0 hạ tầng ✅ · P1 User & Auth ✅ · P2 Product ✅ · P3 Order ✅ · **P4 Payment 🟡** và **P5 Notification & check-in 🟡** đã code + integration test; thanh toán/hết hạn/hoàn tiền đã chạy thật với Stripe test mode (15/11/2026), còn chờ E2E Kafka/SMTP · **P6 Bot-detection 🟡** đã code, huấn luyện trên dữ liệu k6 tự tạo, có báo cáo và chính sách chặn D46 · P7–P9 chưa bắt đầu. Test: backend 181, bot-detection 18 (pytest), Playwright cho P1–P3. Xem [PROGRESS.md](PROGRESS.md) và [TASKS.md](TASKS.md).
 
 ## Stack
 
@@ -99,6 +99,6 @@ Thiếu khóa thì payment-service vẫn khởi động nhưng tạo phiên than
 - Dữ liệu ML là tự tạo (k6 mô phỏng bot + thao tác thật), không phải dữ liệu production.
 - Stripe chỉ ở chế độ test, tiền tệ USD.
 - Integration test cần Postgres/Redis đang chạy (compose) và DB test: `docker exec -i postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d postgres' < docker/postgres/test/create-test-databases.sql`, rồi `cd backend && mvn verify`.
-- Thanh toán mới kiểm chứng bằng integration test với Stripe giả lập; chưa hỗ trợ đơn 0 đồng; buyer chưa chọn hoàn từng vé (chỉ tự động bỏ vé đã check-in).
+- Thanh toán đã chạy thật với Stripe test mode (thẻ 4242: thanh toán, hết hạn, hoàn 100%); hoàn 50%/0% và thanh toán chậm (async) mới có integration test với Stripe giả lập; chưa hỗ trợ đơn 0 đồng; buyer chưa chọn hoàn từng vé (chỉ tự động bỏ vé đã check-in).
 - Bot-detection chỉ được đo trên traffic k6 tự tạo; device ID dễ bị xóa/làm giả.
 - Chưa có rate limiting, chưa deploy.

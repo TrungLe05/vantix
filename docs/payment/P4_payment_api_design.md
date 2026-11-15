@@ -132,4 +132,4 @@ Timeout Feign Order → Payment: connect 2s, read 12s (Payment gọi Stripe tron
 - `PaymentFlowIntegrationTest` (19 case, Postgres thật, Stripe/Kafka giả lập): idempotent theo Order kể cả 8 request song song, từ chối số tiền/deadline/retry lệch, Stripe lỗi rồi retry, webhook chữ ký sai/thiếu/payload bị sửa, webhook lặp chỉ phát một event, expire theo deadline (expired / đã paid / Stripe lỗi), hoàn tiền (một lần, vượt số đã thu, payment chưa trả, lỗi tạm thời + retry, lỗi vĩnh viễn, chốt bằng webhook), outbox gửi object JSON, đăng ký `@KafkaListener`, phân quyền PM01.
 - `OrderPaymentIntegrationTest` (15 case, Postgres/Redis thật): `PAID` + `held → sold`, bản tin lặp, ghế đã bán không giữ lại được sau khi Redis hết TTL, thanh toán trễ → refund 100% đúng một lần, `payment.failed`, OR09, OR08 từ chối `PENDING_PAYMENT`, 3 mốc hoàn, `refund.completed`/`refund.failed`, hủy event hoàn 100% đúng một lần.
 - `RefundPolicyTest` (4 case): biên 7 ngày / 24 giờ, làm tròn.
-- Chưa có: chạy với Stripe thật, E2E qua trình duyệt.
+- Đã chạy thật với Stripe test mode (15/11/2026, `docs/reports/2026-11-15-stripe-test-mode.md`). Chưa có: E2E qua trình duyệt.

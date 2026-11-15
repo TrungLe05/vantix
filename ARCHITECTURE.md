@@ -52,7 +52,7 @@ Nét liền: đã có trong code. Nét đứt: thiết kế, chưa code. API `/i
 | user-service | 9004 | `users_service` | Đăng ký, OTP email, login, refresh rotation, Google OAuth2, tạo STAFF | Có (P1) |
 | product-service | 9003 | `products_service` | Catalog: venue, event, seat map/seat, ticket type, giá gốc | Có (P2) |
 | order-service | 9001 | `orders_service` | Giỏ, hold, tồn kho giao dịch, availability, nhận kết quả thanh toán, tính % hoàn, vé/QR, check-in, `bot_flags` | Có (P3–P6) |
-| payment-service | 9002 | `payments_service` | Stripe Checkout session, webhook, refund — chỉ biết tiền | Có (P4, chưa chạy với Stripe thật) |
+| payment-service | 9002 | `payments_service` | Stripe Checkout session, webhook, refund — chỉ biết tiền | Có (P4, đã chạy thật với Stripe test mode 15/11/2026) |
 | notification-service | 9000 | `notifications_service` | Consume Kafka, gửi email, WebSocket, bảng `notifications` | Có (P5, chưa chạy E2E Kafka/SMTP thật) |
 | bot-detection | 9005 | — (Redis DB 2) | Isolation Forest chấm điểm `cart.item_added`, phát `riskLevel` + `ruleMatched` | Có (P6): consumer/producer Kafka, model offline, BD01–BD03 |
 | assistant | 9006 | — | Trợ lý LLM, stateless | Chỉ `/health` |

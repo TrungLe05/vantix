@@ -1,6 +1,6 @@
 # Vantix — Phase 4: Payment Design
 
-> **Trạng thái:** Đã triển khai (14/11/2026) và kiểm chứng bằng integration test với Stripe giả lập. **Chưa chạy với Stripe thật** (cần `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` test mode) — xem mục 9.
+> **Trạng thái:** Đã triển khai (14/11/2026) và kiểm chứng bằng integration test với Stripe giả lập. Đã chạy thật với Stripe test mode 15/11/2026 (thanh toán thẻ 4242, hết hạn, hoàn 100% — `docs/reports/2026-11-15-stripe-test-mode.md`).
 > **Liên quan:** ../00_roadmap_phases_v1.md (P4), ../order/P3_order_design.md, P4_payment_api_design.md, P4_payment_ui_plan.md, `DECISIONS.md` D27–D30.
 > **Phạm vi:** thanh toán Order `PENDING_PAYMENT` bằng Stripe Checkout (test, USD), webhook idempotent, kết quả về Order qua Kafka, hoàn tiền (3 mốc + hủy event + thanh toán trễ). Phát hành vé/QR và check-in thuộc P5.
 
@@ -200,7 +200,7 @@ Thứ tự khóa giữ nguyên D23: Order → Hold. Handler thanh toán chỉ kh
 
 ## 9. Giới hạn và việc còn lại
 
-- **Chưa kiểm chứng với Stripe thật**: `StripeSdkGateway` (stripe-java 34.1.0) mới được biên dịch, chưa gọi API thật; cần chạy thẻ test `4242 4242 4242 4242` + `stripe listen` theo README.
+- **Đã kiểm chứng với Stripe test mode** (15/11/2026, `docs/reports/2026-11-15-stripe-test-mode.md`): `StripeSdkGateway` tạo/expire phiên Checkout và gọi Refund API thật. Chưa chạy thật: thanh toán async, `refund.failed`, hoàn 50%/0%. Tài khoản sandbox bật Adaptive Pricing nên Checkout hiển thị VND; Payment vẫn ghi nhận USD.
 - Buyer xác nhận giỏ sát deadline có rất ít thời gian trả tiền; trả không kịp thì được hoàn 100% tự động. Có nên cấp thêm "cửa sổ thanh toán" khi confirm hay không là quyết định sản phẩm còn mở.
 - Chưa hỗ trợ đơn 0 đồng (vé miễn phí): OR09 trả `4014`.
 - Chưa hoàn từng vé; chưa có API ADMIN xem/chạy lại refund `FAILED` (hiện xử lý tay bằng log `REFUND_FAILED` + DB).

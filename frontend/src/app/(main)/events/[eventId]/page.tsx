@@ -23,7 +23,7 @@ import {
 } from "@/components/events/EventHeader";
 import { getEvent } from "@/lib/api/events";
 import { getErrorMessage } from "@/lib/api/client";
-import { createOrder } from "@/lib/api/orders";
+import { createOrder, getAvailability } from "@/lib/api/orders";
 import type { TicketType } from "@/types/events";
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -44,6 +44,15 @@ export default function EventDetailPage() {
     queryKey: ["event", params.eventId],
     queryFn: () => getEvent(params.eventId),
   });
+  // Availability (OR07) cũng là tín hiệu "đã xem sự kiện" cho bot-detection (D38); lỗi không chặn mua vé
+  const availability = useQuery({
+    queryKey: ["availability", params.eventId],
+    queryFn: () => getAvailability(params.eventId),
+    staleTime: 15_000,
+  });
+  const remainingByType = new Map(
+    availability.data?.ticketTypes.map((type) => [type.ticketTypeId, type.availableQuantity]) ?? [],
+  );
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const createCart = useMutation({
@@ -229,6 +238,9 @@ export default function EventDetailPage() {
                             {ticket.category === "SEATED"
                               ? "Choose specific seats"
                               : "General admission"}
+                            {ticket.category === "GENERAL_ADMISSION" && remainingByType.has(ticket.id)
+                              ? ` · ${remainingByType.get(ticket.id)} left`
+                              : ""}
                           </p>
                         </div>
                         <span className="shrink-0 text-sm font-bold">

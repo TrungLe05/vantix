@@ -1,6 +1,7 @@
 // src/lib/api/client.ts
 import axios, { type InternalAxiosRequestConfig } from "axios";
 import { useAuthStore } from "@/store/auth-store";
+import { getDeviceId } from "@/lib/device-id";
 
 interface RetryableConfig extends InternalAxiosRequestConfig {
   _retried?: boolean;
@@ -17,6 +18,8 @@ export const apiClient = axios.create({
 apiClient.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  const deviceId = getDeviceId();
+  if (deviceId) config.headers["X-Device-Id"] = deviceId;
   return config;
 });
 

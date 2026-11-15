@@ -46,6 +46,9 @@
 | D40 | Isolation Forest huấn luyện offline trên log k6, artifact commit vào repo; ngưỡng HIGH giới hạn ≤ 1% lần thêm giỏ của người dùng trên validation | Chốt (P6) |
 | D41 | HIGH → `bot_flags` ACTIVE; chặn thêm giỏ theo buyer **hoặc** thiết bị (4019), không đụng hold; ADMIN review/gỡ (OR14/OR15) | Chốt (chủ repo chọn 15/11/2026) |
 | D42 | Thiếu model → bot-detection vẫn tính feature, phát `UNSCORED`; Order chỉ phản ứng với HIGH | Chốt (P6) |
+| D43 | Buyer hủy đơn có vé đã check-in: hoàn theo mốc thời gian cho **vé chưa dùng**, vé đã dùng không hoàn và không nhả kho; quote trả lý do | Chốt (chủ repo chọn 15/11/2026); bổ sung D29 |
+| D44 | Check-in chỉ mở từ 3 giờ trước giờ bắt đầu tới giờ kết thúc sự kiện (4021) | Chốt (chủ repo chọn 15/11/2026) |
+| D45 | Venue mới bắt buộc tọa độ, chọn từ kết quả tìm địa chỉ OpenStreetMap (Nominatim + Leaflet) | Chốt (chủ repo chọn 15/11/2026) |
 
 ---
 
@@ -188,3 +191,11 @@ Chỉ `HIGH` tạo flag; một dòng ACTIVE mỗi buyer (partial unique index, u
 ### D42 — Chế độ UNSCORED
 Chưa có model (lần đầu triển khai, hoặc model bị từ chối vì lệch feature) → service vẫn consume, tính feature và phát `riskLevel = UNSCORED`, `anomalyScore = null`. Nhờ vậy chính pipeline online được dùng để thu dữ liệu, và Order không bao giờ chặn khi model chưa sẵn sàng (fail open).
 
+### D43 — Hoàn tiền vé chưa dùng khi đơn có vé đã check-in
+Phát hiện khi chạy thử: đơn 4 vé có 2 vé đã quét (quét sớm 5 ngày vì check-in chưa giới hạn giờ) thì buyer không hoàn được gì, và UI báo nhầm lý do "< 24 giờ". D29 (hoàn cả đơn) chặn cả đơn để không hoàn tiền vé đã dùng. Chủ repo chọn (15/11/2026): hoàn **vé chưa dùng** theo mốc thời gian, vé đã check-in không hoàn. Số tiền = % × tổng giá snapshot của vé `VALID`. Chỉ nhả tồn kho phần chưa dùng: ghế đã có người ngồi giữ `PURCHASED` (nếu nhả, ghế có thể bị bán lại), hold GA giảm `quantity` theo số vé chưa dùng. Vẫn một refund mỗi Order (sau lần hoàn này không còn vé `VALID`), Payment không đổi vì vốn đã cho hoàn một phần số tiền đã thu. OR10 trả `reason` (`NOT_PAID`, `ALREADY_REFUNDED`, `TOO_CLOSE_TO_EVENT`, `ALL_TICKETS_USED`), `refundableTickets`, `usedTickets` để UI không phải đoán. ADMIN hủy event giữ D16 (hoàn 100% cả đơn). Với D44, buyer gần như không còn gặp tình huống này (check-in mở ≤ 3 giờ trước, hoàn chỉ được ≥ 24 giờ trước) — D43 chủ yếu xử lý dữ liệu cũ và giữ đúng nếu khung check-in nới ra. Giới hạn: event bị hủy sau khi buyer đã hoàn một phần thì không hoàn thêm (một refund/Order).
+
+### D44 — Khung giờ check-in
+Trước đây STAFF quét được bất cứ lúc nào — vé có thể bị đánh dấu đã dùng nhiều ngày trước sự kiện (nhầm sự kiện, thử máy quét…). Chủ repo chọn: từ 3 giờ trước giờ bắt đầu (`app.order.check-in-opens-before`, mặc định `PT3H`) tới giờ kết thúc (event không có giờ kết thúc: +12 giờ). Ngoài khung → `4021 CHECK_IN_NOT_OPEN` kèm `{opensAt, closesAt}`, vé không đổi trạng thái. Order hỏi Product giờ sự kiện mỗi lần quét (fail closed 4010); event không tồn tại báo `4016` như vé không có (giữ D32). Trang `/check-in` hiển thị card các sự kiện trong 7 ngày tới, chỉ mở quét cho sự kiện đã tới khung; quét liên tục, không cần bấm "quét vé kế".
+
+### D45 — Tọa độ venue từ OpenStreetMap
+Địa chỉ venue gõ tay có thể không tồn tại. Chủ repo chọn OpenStreetMap: Leaflet hiển thị bản đồ, Nominatim tìm địa chỉ (chỉ khi bấm tìm, tối đa 5 kết quả — theo chính sách sử dụng của Nominatim, không autocomplete), không cần API key. ADMIN phải chọn một kết quả; frontend điền địa chỉ/thành phố và gửi `latitude`/`longitude`. Backend bắt buộc tọa độ hợp lệ với venue mới (migration `V5__venue_coordinates.sql`, venue cũ giữ NULL), lưu làm tròn 6 chữ số. Backend **không** tự gọi Nominatim để kiểm lại (thêm phụ thuộc mạng ra ngoài cho product-service) — tọa độ chứng minh địa chỉ đã được chọn từ dữ liệu bản đồ, không chống được ADMIN cố ý gửi tọa độ giả qua API. Đánh đổi: thêm dependency `leaflet` ở frontend; tile và tìm kiếm phụ thuộc máy chủ công cộng của OSM (giới hạn ~1 request/giây, đủ cho thao tác của ADMIN).

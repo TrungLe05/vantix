@@ -69,6 +69,14 @@ Nhánh `feature/notification-checkin` (14/11/2026, tách từ `feature/payment-s
 - [ ] ⚪ Thông báo cảnh báo bot (chờ P6), thông báo cho STAFF/ADMIN, tên sự kiện trong nội dung thông báo, chuyển nhượng vé (FR4 < 24 giờ).
 - [ ] ⚪ Tách `PageResponse` vào common-lib (đã có 3 bản sao: product, order, notification).
 
+## Sửa sau chạy thử (15/11/2026)
+
+- [x] Hoàn tiền vé chưa dùng khi đơn có vé đã check-in, OR10 trả lý do (D43); UI báo đúng lý do.
+- [x] Khung check-in 3 giờ trước → kết thúc (D44); trang check-in dạng card, quét liên tục.
+- [x] Venue bắt buộc tọa độ chọn từ OpenStreetMap (D45); wizard sửa hạng vé tại chỗ (PR13 + số lượng GA khi DRAFT); sắp xếp bảng sự kiện; trang tạo STAFF; nhắc đăng nhập khi giữ vé.
+- [ ] 🟠 Kiểm tra các màn hình trên trên trình duyệt (camera, bản đồ, redirect đăng nhập) + Playwright.
+- [ ] ⚪ Sửa/xóa venue và cập nhật tọa độ cho venue cũ (hiện `null`); danh sách tài khoản STAFF (chưa có API liệt kê).
+
 ## P6 — Bot-detection
 
 - [x] Thiết kế `docs/bot-detection/P6_bot_detection_design.md`, `P6_bot_detection_api_design.md`, `P6_bot_detection_ui_plan.md`; D37–D42.

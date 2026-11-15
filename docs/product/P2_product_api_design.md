@@ -137,6 +137,7 @@ Hủy event vẫn dùng Kafka từ Product sang Order. Availability được đ�
 | 3301 | TICKET_TYPE_NOT_FOUND | 404 | Không tìm thấy hạng vé |
 | 3302 | GA_QUANTITY_REQUIRED | 400 | Hạng vé GA phải có số lượng lớn hơn 0 |
 | 3303 | SEAT_IDS_REQUIRED_FOR_SEATED | 400 | Hạng vé SEATED phải gán ít nhất một ghế |
+| 3304 | TICKET_QUANTITY_NOT_EDITABLE | 409 | PR13 gửi `totalQuantity` cho hạng SEATED hoặc khi event không còn DRAFT |
 
 ---
 
@@ -145,6 +146,8 @@ Hủy event vẫn dùng Kafka từ Product sang Order. Availability được đ�
 ### PR01 — Tạo địa điểm
 
 `POST /api/venues` · ADMIN
+
+> **Cập nhật 15/11/2026 (D45):** bắt buộc thêm `latitude` (−90…90) và `longitude` (−180…180) — tọa độ của kết quả tìm địa chỉ OpenStreetMap mà ADMIN chọn; lưu làm tròn 6 chữ số, response trả lại hai field này (venue cũ: `null`). Thiếu/sai → `1001`.
 
 **Request body**
 
@@ -631,7 +634,7 @@ Validation từng phần tử: mục 3. `displayLabel` **không** nhận từ cl
 | `name` | string | mục 3 |
 | `price` | decimal | mục 3 |
 
-`category`, `totalQuantity`, danh sách ghế **không sửa được** qua API này (muốn đổi thành phần ghế, tạo hạng vé mới — ngoài phạm vi P2).
+`totalQuantity` (≥ 1) sửa được **chỉ với hạng GA khi event còn DRAFT** (cập nhật 15/11/2026; ngoài điều kiện đó → `3304`, vì sau publish Order có thể đã dựng tồn kho từ con số này). `category`, danh sách ghế **không sửa được** qua API này (muốn đổi thành phần ghế, tạo hạng vé mới — ngoài phạm vi P2).
 
 **Response 200**
 

@@ -11,6 +11,7 @@
 | 4016 | TICKET_NOT_FOUND | 404 | Mã vé không tồn tại, thuộc sự kiện khác, hoặc ticketId không thuộc Order |
 | 4017 | TICKET_ALREADY_CHECKED_IN | 409 | Vé đã check-in; `result` = thông tin lần quét đầu (shape `CheckInResponse`) |
 | 4018 | TICKET_NOT_VALID | 409 | Vé `VOID` (đơn đã hoàn / event đã hủy) |
+| 4021 | CHECK_IN_NOT_OPEN | 409 | Ngoài khung check-in (D44); `result` = `{opensAt, closesAt}` |
 | 6001 | NOTIFICATION_NOT_FOUND | 404 | Thông báo không tồn tại hoặc của người khác |
 
 `4015 REFUND_NOT_ALLOWED` nay cũng trả khi đơn có vé đã check-in. `2601 USER_NOT_FOUND` dùng cho API nội bộ.
@@ -26,7 +27,7 @@
   ~~~
   `status`: `VALID` | `CHECKED_IN` | `VOID`. `code` chỉ có trong response của chính buyer (OR03).
 - `payment.succeeded` cho Order `PENDING_PAYMENT` nay chuyển thẳng sang **`TICKETS_ISSUED`** (P4 ghi `PAID`; `PAID` chỉ còn là trạng thái trung gian trong cùng transaction). Mọi chỗ kiểm tra "đã thanh toán" dùng `PAID` hoặc `TICKETS_ISSUED`.
-- OR10 trả `refundable=false`, `percent=0` khi đơn có vé `CHECKED_IN`.
+- OR10/OR11 (cập nhật 15/11/2026, D43): đơn có vé `CHECKED_IN` vẫn hoàn được phần vé chưa dùng; chỉ khi mọi vé đã dùng mới `refundable=false` với `reason=ALL_TICKETS_USED`.
 
 ### OR12 — Ảnh QR của vé
 `GET /api/orders/{orderId}/tickets/{ticketId}/qr` — BUYER, chủ đơn.
@@ -48,7 +49,7 @@ Quét trùng:
 ~~~json
 { "code": 4017, "message": "Vé đã được check-in trước đó", "result": { "ticketId": "uuid", "checkedInAt": "…", "checkedInBy": "uuid", "…": "…" } }
 ~~~
-Lỗi khác: `4016`, `4018`, `1003` (thiếu danh tính), `1004` (BUYER).
+Lỗi khác: `4016`, `4018`, `4021` (ngoài khung check-in, D44), `4010` (không hỏi được Product giờ sự kiện), `1003` (thiếu danh tính), `1004` (BUYER).
 
 ## 3. Notification API (mọi vai trò đã đăng nhập, chỉ dữ liệu của chính user)
 

@@ -190,12 +190,45 @@ class BotDetectionIntegrationTest extends AbstractOrderIT {
         UUID buyer = UUID.randomUUID();
         String payload = """
                 {"evaluationId":"%s","orderId":"%s","buyerId":"%s","eventId":"%s","deviceHash":null,
-                 "anomalyScore":0.6931,"riskLevel":"HIGH","modelVersion":"iforest-test",
+                 "anomalyScore":0.6931,"riskLevel":"HIGH","modelVersion":"iforest-test","ruleMatched":true,
                  "features":{"buyer_adds_1m":9,"viewed_event":0},"occurredAt":"%s","evaluatedAt":"%s",
                  "schemaVersion":1}
                 """.formatted(UUID.randomUUID(), UUID.randomUUID(), buyer, eventId, Instant.now(), Instant.now());
         orderEventListener.onBotScoreEvaluated(payload);
         assertError(() -> createCart(buyer, key(), ga(1)), 4019);
+    }
+
+    @Test
+    void loneHighWithoutRuleOnlyWatchesUntilASecondHigh() {
+        UUID buyer = UUID.randomUUID();
+        botFlagService.recordEvaluation(evaluation(buyer, "dev-watch", UUID.randomUUID(), "HIGH", "0.60",
+                Instant.now(), false));
+        // D46: HIGH đơn lẻ không kèm luật — ghi nhận để review, chưa chặn
+        assertThat(jdbc.queryForObject("SELECT status FROM bot_flags WHERE buyer_id = ?", String.class, buyer))
+                .isEqualTo("WATCH");
+        assertThat(createCart(buyer, key(), ga(1)).getStatus()).isEqualTo(OrderStatus.CART);
+
+        botFlagService.recordEvaluation(evaluation(buyer, "dev-watch", UUID.randomUUID(), "HIGH", "0.58",
+                Instant.now(), false));
+        Map<String, Object> row = jdbc.queryForMap("SELECT status, hit_count FROM bot_flags WHERE buyer_id = ?", buyer);
+        assertThat(row.get("status")).isEqualTo("ACTIVE");
+        assertThat(row.get("hit_count")).isEqualTo(2);
+        assertError(() -> createCart(buyer, key(), seat(0)), 4019);
+    }
+
+    @Test
+    void watchFlagCanBeDismissedAndListedSeparately() throws Exception {
+        UUID buyer = UUID.randomUUID();
+        botFlagService.recordEvaluation(evaluation(buyer, null, UUID.randomUUID(), "HIGH", "0.61",
+                Instant.now(), false));
+        UUID flagId = jdbc.queryForObject("SELECT id FROM bot_flags WHERE buyer_id = ?", UUID.class, buyer);
+        mvc.perform(get("/orders/bot-flags").param("status", "WATCH").param("size", "100")
+                        .header("X-User-Id", ADMIN_ID).header("X-User-Role", "ADMIN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.content[?(@.id == '" + flagId + "')].status").value("WATCH"));
+        mvc.perform(post("/orders/bot-flags/" + flagId + "/clear")
+                        .header("X-User-Id", ADMIN_ID).header("X-User-Role", "ADMIN"))
+                .andExpect(jsonPath("$.result.status").value("CLEARED"));
     }
 
     // ---------- ADMIN review ----------
@@ -276,8 +309,13 @@ class BotDetectionIntegrationTest extends AbstractOrderIT {
 
     private BotScoreEvaluatedEvent evaluation(UUID buyer, String deviceHash, UUID orderId, String level,
                                               String score, Instant occurredAt) {
+        return evaluation(buyer, deviceHash, orderId, level, score, occurredAt, true);
+    }
+
+    private BotScoreEvaluatedEvent evaluation(UUID buyer, String deviceHash, UUID orderId, String level,
+                                              String score, Instant occurredAt, boolean ruleMatched) {
         return new BotScoreEvaluatedEvent(UUID.randomUUID(), orderId, buyer, eventId, deviceHash,
-                score == null ? null : new BigDecimal(score), level, "iforest-test",
+                score == null ? null : new BigDecimal(score), level, "iforest-test", ruleMatched,
                 Map.of("buyer_adds_1m", 9, "viewed_event", 0), occurredAt, Instant.now());
     }
 

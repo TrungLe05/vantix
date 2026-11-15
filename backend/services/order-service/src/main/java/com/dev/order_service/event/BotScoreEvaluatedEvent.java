@@ -21,10 +21,16 @@ public record BotScoreEvaluatedEvent(
         BigDecimal anomalyScore,
         String riskLevel,
         String modelVersion,
+        // D46: luật tay (dồn dập/nhiều tài khoản trên thiết bị) cũng đúng; null với bản tin cũ = false
+        Boolean ruleMatched,
         Map<String, Object> features,
         Instant occurredAt,
         Instant evaluatedAt
 ) {
+    public boolean ruleMatchedOrFalse() {
+        return Boolean.TRUE.equals(ruleMatched);
+    }
+
     public boolean isHighRisk() {
         return "HIGH".equals(riskLevel) && anomalyScore != null;
     }

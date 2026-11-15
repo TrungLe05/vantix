@@ -71,10 +71,15 @@ Nhánh `feature/notification-checkin` (14/11/2026, tách từ `feature/payment-s
 
 ## P6 — Bot-detection
 
-- [ ] Chốt schema `cart.item_added` cho feature (hash device fingerprint, consent P8) và topic kết quả `bot_score.evaluated`.
-- [ ] k6 mô phỏng bot + thu log thật; feature engineering; huấn luyện Isolation Forest; notebook đánh giá trung thực.
-- [ ] FastAPI consumer/producer; Order chặn lần thêm giỏ kế tiếp + đánh dấu review.
-- [ ] Quyết định D19 (OTP xác thực thiết bị).
+- [x] Thiết kế `docs/bot-detection/P6_bot_detection_design.md`, `P6_bot_detection_api_design.md`, `P6_bot_detection_ui_plan.md`; D37–D42.
+- [x] Device ID (`X-Device-Id`, HMAC ở Order), lượt xem qua availability, `cart.item_added` thêm `deviceHash`/`eventViewedAt`.
+- [x] bot-detection: feature theo cửa sổ Redis, tuổi tài khoản từ user-service (`/internal/users/{id}/account`), consumer/producer Kafka, BD01–BD03, pytest + job CI.
+- [x] k6 sinh dữ liệu (người dùng + 3 kiểu bot) trên stack e2e, huấn luyện Isolation Forest, notebook + báo cáo `P6_bot_detection_report.md`.
+- [x] Order: `bot_flags`, chặn 4019 theo buyer/thiết bị, OR14/OR15; frontend trang Bot review.
+- [ ] 🔴 Giảm chặn nhầm (offline 3.5%, live 8% tài khoản người dùng mô phỏng) và tìm nguyên nhân live tệ hơn offline: kết hợp luật tay, ngưỡng theo nhiều lần HIGH; thu traffic người dùng thật để đo lại.
+- [ ] 🟠 Playwright cho trang Bot review và thông báo 4019; kiểm tra trên trình duyệt.
+- [ ] ⚪ Thông báo cho ADMIN khi có flag mới; dashboard tỉ lệ HIGH (P9).
+- [ ] ⚪ Quyết định D19 (OTP xác thực thiết bị) — P6 không cần, vẫn mở.
 
 ## P7 — Assistant
 

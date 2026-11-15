@@ -40,6 +40,12 @@
 | D34 | Email người nhận lấy từ user-service qua API nội bộ role INTERNAL | Chốt (P5) |
 | D35 | WebSocket thuần, xác thực bằng ticket một lần 30 giây, giới hạn Origin | Chốt (P5); nhiều instance cần Redis (P9) |
 | D36 | QR sinh ở backend (zxing core), quét bằng BarcodeDetector hoặc nhập tay — không thêm dependency frontend | Chốt (chủ repo chọn 14/11/2026) |
+| D37 | Device ID = UUID ngẫu nhiên ở localStorage, header `X-Device-Id`; order-service chỉ giữ/phát HMAC (`DEVICE_HASH_SECRET`) | Chốt (chủ repo chọn 15/11/2026) |
+| D38 | `cart.item_added` thêm `deviceHash`, `eventViewedAt` (bổ sung field); "đã xem" ghi khi thiết bị gọi availability | Chốt (P6) |
+| D39 | Feature tính theo `occurredAt` với cửa sổ Redis (sorted set, khóa theo bản tin); tuổi tài khoản từ user-service `/internal/users/{id}/account` | Chốt (P6) |
+| D40 | Isolation Forest huấn luyện offline trên log k6, artifact commit vào repo; ngưỡng HIGH giới hạn ≤ 1% lần thêm giỏ của người dùng trên validation | Chốt (P6) |
+| D41 | HIGH → `bot_flags` ACTIVE; chặn thêm giỏ theo buyer **hoặc** thiết bị (4019), không đụng hold; ADMIN review/gỡ (OR14/OR15) | Chốt (chủ repo chọn 15/11/2026) |
+| D42 | Thiếu model → bot-detection vẫn tính feature, phát `UNSCORED`; Order chỉ phản ứng với HIGH | Chốt (P6) |
 
 ---
 
@@ -163,3 +169,22 @@ Trình duyệt không gửi được header `Authorization` khi mở WebSocket. 
 
 ### D36 — QR sinh ở backend
 Frontend chưa có thư viện QR; quy tắc dự án yêu cầu hỏi trước khi thêm dependency. Chủ repo chọn (14/11/2026): backend sinh PNG bằng `com.google.zxing:core` 3.5.4 (tự ghi PNG bằng `ImageIO`, không kéo module `javase` vào runtime; `javase` chỉ ở scope test để đọc ngược QR), API trả `Cache-Control: no-store`. STAFF quét bằng `BarcodeDetector` của trình duyệt (Chrome/Edge/Android) hoặc nhập/dán mã (máy quét USB/Bluetooth gõ như bàn phím). Phương án bị loại: thêm `qrcode` + `@zxing/browser` ở frontend (2 dependency), hoặc bỏ QR khỏi P5.
+
+### D37 — Device ID ngẫu nhiên, chỉ lưu HMAC
+Roadmap cần "số tài khoản trên cùng thiết bị" và "chặn lần thêm giỏ tiếp theo từ cùng thiết bị", nhưng hệ thống chưa nhận diện thiết bị nào. Cân nhắc: (a) thư viện fingerprint trình duyệt (FingerprintJS…) — ổn định hơn nhưng thêm dependency, thu thập đặc điểm trình duyệt (nặng phần P8); (b) UUID ngẫu nhiên do frontend sinh một lần, lưu localStorage; (c) bỏ tín hiệu thiết bị. Chủ repo chọn (b) (15/11/2026). Order nhận header `X-Device-Id`, chỉ chấp nhận định dạng UUID (sai/thiếu = không có thiết bị, không lỗi), băm `HMAC-SHA256(DEVICE_HASH_SECRET, id)` ngay ở filter; ID thô không vào DB, Kafka hay log. Secret trống → sinh ngẫu nhiên mỗi lần khởi động + WARN (dev chạy được, đổi lại hash không ổn định). Giới hạn: bot xóa storage hoặc không gửi header là thoát tín hiệu thiết bị — nên chặn theo cả tài khoản (D41) và có feature `has_device`.
+
+### D38 — Bổ sung field cho `cart.item_added`
+Feature "không xem chi tiết sự kiện trước khi thêm giỏ" cần dấu vết xem trang; chỉ Order thấy cả lượt xem (availability) lẫn thêm giỏ. Order ghi lần đầu thiết bị gọi OR07 (`SET NX`, TTL 2 giờ, best-effort) và gửi `eventViewedAt` cùng `deviceHash` trong `cart.item_added`. Chỉ **thêm** field (topic chưa có consumer trước P6); bản tin chuyển sang cột `payload` JSON của outbox như event P4/P5, bản ghi cũ dạng cột vẫn gửi được. Trang chi tiết sự kiện gọi availability (hiển thị "N left" cho GA) để người mua GA cũng có tín hiệu. Giới hạn: bot gọi availability trước là "đã xem".
+
+### D39 — Cửa sổ feature theo thời điểm bản tin
+bot-detection giữ sorted set trong Redis (buyer/thiết bị → lần thêm giỏ, thiết bị → tài khoản, buyer → sự kiện), score = epoch ms của `occurredAt`, member = khóa bản tin (`orderId:occurredAt:itemCount:quantity`) nên Kafka phát lại không đếm trùng; cùng ngữ nghĩa được cài trong bộ nhớ để tái hiện log offline (test so khớp hai bản). Tuổi tài khoản: Order không có, gửi trong JWT phải đổi hợp đồng auth → gọi user-service `/internal/users/{id}/account` (role INTERNAL, chỉ `createdAt`, không PII), cache 24 giờ; lỗi tạm thời → retry bản tin; user không tồn tại → giá trị thay thế (median của tập train).
+
+### D40 — Huấn luyện offline, commit artifact
+Dữ liệu sinh bằng k6 trên stack thật (`*_e2e`), log lấy từ outbox (payload đúng như đã gửi Kafka), tái hiện qua đúng code feature. Vòng A = train/validation (chia theo tài khoản), vòng B = test (tài khoản và lần chạy khác). Kịch bản cho bot sinh nhiều lần thêm giỏ hơn người dùng; Isolation Forest giả định bất thường là thiểu số nên tập train được lấy mẫu để bot ≈ 10% — bước dùng nhãn, ghi rõ trong báo cáo cùng kết quả của model học trên tỉ lệ tự nhiên. Ngưỡng: HIGH = phân vị 99% điểm của người dùng trên validation (≤ 1% lần thêm giỏ của người dùng bị chặn), MEDIUM = phân vị 95%. Artifact (`model/isolation_forest.joblib` + `model_meta.json` có danh sách feature, ngưỡng, chỉ số) commit vào repo: nhỏ, tái lập được bằng `training/`; service từ chối model có danh sách feature khác code.
+
+### D41 — Phản ứng của Order với điểm rủi ro
+Chỉ `HIGH` tạo flag; một dòng ACTIVE mỗi buyer (partial unique index, upsert gộp `hit_count`, giữ điểm cao nhất). OR01/OR04/OR06 (tăng số lượng) bị chặn `4019` nếu buyer **hoặc** thiết bị có flag ACTIVE — kiểm tra trước khi gọi Product; giảm số lượng, xem, thanh toán giỏ hiện có vẫn được (không hủy hold, roadmap). Chặn theo cả hai vì bot đổi được thiết bị (D37) và một thiết bị có thể chạy nhiều tài khoản. ADMIN gỡ (OR15) → CLEARED, giữ lịch sử; điểm của lần thêm giỏ xảy ra trước lúc gỡ bị bỏ qua để Kafka phát lại không khóa lại. Không tự gỡ theo thời gian (chủ repo chọn có trang review). Không gắn cờ ở MEDIUM: chỉ hiển thị trong log điểm.
+
+### D42 — Chế độ UNSCORED
+Chưa có model (lần đầu triển khai, hoặc model bị từ chối vì lệch feature) → service vẫn consume, tính feature và phát `riskLevel = UNSCORED`, `anomalyScore = null`. Nhờ vậy chính pipeline online được dùng để thu dữ liệu, và Order không bao giờ chặn khi model chưa sẵn sàng (fail open).
+

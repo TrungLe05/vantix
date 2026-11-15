@@ -71,6 +71,10 @@ export interface RefundQuote {
   currency: "USD";
   paidAmount: number;
   eventStartAt: string | null;
+  // D43: lý do khi refundable = false; vé đã check-in không được hoàn, vé còn lại vẫn hoàn theo mốc
+  reason: "NOT_PAID" | "ALREADY_REFUNDED" | "TOO_CLOSE_TO_EVENT" | "ALL_TICKETS_USED" | null;
+  refundableTickets: number;
+  usedTickets: number;
 }
 
 // OR13 — kết quả quét vé; cũng là result của lỗi 4017 (đã check-in: ai quét, lúc nào)

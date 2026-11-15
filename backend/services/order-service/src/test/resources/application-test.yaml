@@ -21,3 +21,6 @@ app:
     # Test gọi publishPendingEvents trực tiếp; không để lần chạy nền đua với test
     outbox-initial-delay-ms: 3600000
     outbox-poll-interval-ms: 3600000
+    # Event test mặc định diễn ra sau 30 ngày; mở khung check-in rộng để test vé không phụ thuộc giờ.
+    # Khung thật (PT3H) được kiểm ở CheckInWindowIntegrationTest
+    check-in-opens-before: P3650D

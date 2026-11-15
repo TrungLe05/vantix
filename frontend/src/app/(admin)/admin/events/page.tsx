@@ -53,9 +53,26 @@ type DashboardEvent = {
   venueName: string;
   venueArea: string;
   startAt: string;
+  endAt: string;
   ticketSummary: string;
   status: AdminEventStatus;
 };
+
+// Thứ tự hiển thị: nháp (cần xử lý) → sắp/đang diễn ra (gần nhất trước) → đã qua hoặc đã hủy (mới nhất trước)
+function displayGroup(event: DashboardEvent, now: number) {
+  if (event.status === "DRAFT") return 0;
+  if (event.status === "PUBLISHED" && new Date(event.endAt).getTime() >= now) return 1;
+  return 2;
+}
+
+function compareForDisplay(now: number) {
+  return (a: DashboardEvent, b: DashboardEvent) => {
+    const group = displayGroup(a, now) - displayGroup(b, now);
+    if (group !== 0) return group;
+    const diff = new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
+    return displayGroup(a, now) === 2 ? -diff : diff;
+  };
+}
 
 function formatEventDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -123,6 +140,7 @@ export default function AdminEventsPage() {
       venueName: event.venue?.name ?? "—",
       venueArea: event.venue?.city ?? "—",
       startAt: event.startAt,
+      endAt: event.endAt,
       ticketSummary:
         event.minPrice === null
           ? "—"
@@ -145,8 +163,8 @@ export default function AdminEventsPage() {
           value.toLocaleLowerCase("vi").includes(query),
         );
       return matchesStatus && matchesVenue && matchesDate && matchesSearch;
-    });
-  }, [date, events, search, status, venue]);
+    }).sort(compareForDisplay(eventsQuery.dataUpdatedAt));
+  }, [date, events, eventsQuery.dataUpdatedAt, search, status, venue]);
 
   const monthOptions = [
     ...new Set(events.map((event) => event.startAt.slice(0, 7))),

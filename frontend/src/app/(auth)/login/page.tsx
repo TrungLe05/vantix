@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { login } from "@/lib/api/auth";
 import { getErrorMessage } from "@/lib/api/client";
 import { useAuthStore } from "@/store/auth-store";
+import { safeNextPath } from "@/lib/auth-redirect";
 import { Mail } from "lucide-react";
 import { IconInput } from "@/components/auth/IconInput";
 
@@ -41,12 +42,15 @@ function LoginForm() {
     mutationFn: (data: LoginForm) => login(data.email, data.password),
     onSuccess: ({ auth, user }) => {
       setSession(auth.accessToken, user);
+      const next = safeNextPath(searchParams.get("next"));
       router.push(
         user.mustChangePassword
           ? "/change-password"
-          : user.role === "ADMIN"
-            ? "/admin/events"
-            : "/",
+          : next
+            ? next
+            : user.role === "ADMIN"
+              ? "/admin/events"
+              : "/",
       );
     },
   });
@@ -59,6 +63,14 @@ function LoginForm() {
       <p className="mt-2 text-sm text-muted-foreground">
         Log in to continue to Vantix
       </p>
+      {searchParams.get("reason") === "checkout" ? (
+        <p
+          role="status"
+          className="mt-4 rounded-lg bg-primary/10 p-3 text-sm text-primary"
+        >
+          Please log in to hold tickets. You will return to the event after logging in.
+        </p>
+      ) : null}
       {searchParams.get("passwordReset") === "1" ||
       searchParams.get("passwordChanged") === "1" ? (
         <p

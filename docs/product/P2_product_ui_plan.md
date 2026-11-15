@@ -149,3 +149,11 @@ Form tương tự Bước 1 của wizard, nhưng **disable các field giới h�
 ---
 
 *Hết tài liệu Phase 2. Phase 3 (Order UI) chỉ lập kế hoạch khi `P3_order_api_design.md` phía backend đã có — tránh thiết kế UI cho API chưa tồn tại.*
+
+## Cập nhật 15/11/2026
+
+- Bảng sự kiện admin: sắp theo nhóm — DRAFT trước (giờ bắt đầu tăng dần), rồi sự kiện sắp/đang diễn ra (gần nhất trước), cuối cùng sự kiện đã qua hoặc đã hủy (mới nhất trước).
+- Wizard tạo sự kiện: các hạng vé đã tạo hiện ngay bên dưới (tên, giá, số lượng, ghế đã gán) và sửa tại chỗ qua PR13; số lượng GA chỉ sửa khi chưa publish.
+- Venue: form tạo có ô tìm địa chỉ + bản đồ Leaflet (OpenStreetMap, D45); bắt buộc chọn một kết quả, cột "Map" mở vị trí trên openstreetmap.org. Thêm dependency `leaflet` 1.9.4, `@types/leaflet` (chủ repo đồng ý 15/11/2026).
+- Trang `/admin/staff`: tạo tài khoản STAFF (A14) — mật khẩu tạm ngẫu nhiên gửi qua email, bắt đổi ở lần đăng nhập đầu; ADMIN không thấy mật khẩu.
+- **Chưa** kiểm tra trên trình duyệt; Playwright `admin.spec.ts` không tạo venue qua UI nên không cần sửa.

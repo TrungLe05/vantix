@@ -150,6 +150,8 @@ class EventOutboxPublisherIntegrationTest {
         venue.setName("Outbox Venue");
         venue.setAddress("1 Test St");
         venue.setCity("HCM");
+        venue.setLatitude(new java.math.BigDecimal("10.776889"));
+        venue.setLongitude(new java.math.BigDecimal("106.700806"));
         UUID venueId = venueService.create(venue).getId();
         com.dev.product_service.dto.request.CreateEventRequest event = new com.dev.product_service.dto.request.CreateEventRequest();
         Instant start = Instant.now().plus(java.time.Duration.ofDays(30));

@@ -16,7 +16,7 @@
 |---|---|---:|---|
 | 4013 | PAYMENT_SERVICE_UNAVAILABLE | 503 | Order không gọi được Payment hoặc Payment/Stripe lỗi khi tạo phiên (fail closed) |
 | 4014 | ORDER_NOT_PAYABLE | 409 | Tổng tiền < 0.50 USD (kể cả đơn 0 đồng) |
-| 4015 | REFUND_NOT_ALLOWED | 409 | Order chưa thanh toán, hoặc mốc hoàn 0% (< 24 giờ trước event) |
+| 4015 | REFUND_NOT_ALLOWED | 409 | Order chưa thanh toán, mốc hoàn 0% (< 24 giờ trước event), hoặc mọi vé đã check-in |
 | 5002 | PAYMENT_STATE_CONFLICT | 409 | Order đã có payment khác buyer/số tiền, hoặc payment đã `SUCCEEDED`/`FAILED` |
 | 5003 | PAYMENT_AMOUNT_INVALID | 400 | Không phải USD, quá 2 chữ số thập phân, hoặc < 0.50 |
 | 5004 | PAYMENT_DEADLINE_PASSED | 409 | `expiresAt` đã qua hoặc payment đã `EXPIRED` |
@@ -52,6 +52,8 @@ Order chưa `PAID` → `refundable=false`, `percent=0`, `amount=0.00`, `eventSta
 `POST /api/orders/{orderId}/refund` — không body.
 
 Server tính lại % theo `RefundPolicy` tại thời điểm gọi. Trong một transaction: nhả vé (hold `PURCHASED → RELEASED`, item `CANCELLED`, tồn GA `sold` giảm), Order → `REFUND_PENDING`, tạo `order_refunds` `REQUESTED`, ghi outbox `order.refund-requested`. Trả `OrderResponse`. Gọi lại khi đã `REFUND_PENDING`/`REFUNDED` trả nguyên trạng (không lỗi, không tạo refund thứ hai). Lỗi: `4001`, `4015`, `4010`.
+
+**Cập nhật 15/11/2026 (D43):** đơn có vé đã check-in chỉ hoàn phần vé chưa dùng: số tiền = % × tổng giá vé `VALID`, chỉ nhả tồn kho của vé chưa dùng (ghế đã dùng giữ `PURCHASED`, hold GA giảm số lượng). OR10 thêm `reason` (`NOT_PAID` \| `ALREADY_REFUNDED` \| `TOO_CLOSE_TO_EVENT` \| `ALL_TICKETS_USED` \| null), `refundableTickets`, `usedTickets`.
 
 ### Thay đổi API P3
 

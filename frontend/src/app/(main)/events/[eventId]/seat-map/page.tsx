@@ -10,6 +10,8 @@ import { EventDate, EventFooter, EventHeader } from "@/components/events/EventHe
 import { getEvent, getSeatMap } from "@/lib/api/events";
 import { getErrorMessage } from "@/lib/api/client";
 import { createOrder, getAvailability } from "@/lib/api/orders";
+import { loginRedirectPath } from "@/lib/auth-redirect";
+import { useAuthStore } from "@/store/auth-store";
 import type { Seat } from "@/types/events";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
@@ -25,6 +27,7 @@ function SeatMapContent() {
   ] });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const isLoggedIn = useAuthStore((state) => Boolean(state.accessToken));
   const [activeTierId, setActiveTierId] = useState<string | null>(null);
   const [now, setNow] = useState(0);
   useEffect(() => {
@@ -113,7 +116,16 @@ function SeatMapContent() {
             {gaSelections.map(({ ticket }) => <p key={`availability-${ticket.id}`} className="mt-2 text-xs text-muted-foreground">{ticket.name}: {availabilityByType.get(ticket.id) ?? 0} available</p>)}
             <div className="mt-5 flex justify-between border-t border-border pt-4 text-sm"><span className="font-semibold">Subtotal · {selectedCount} tickets</span><span className="font-bold">{currency.format(total)}</span></div>
             <p className="mt-2 text-xs text-muted-foreground">Service fees are calculated at checkout.</p>
-            <button type="button" onClick={() => { setCheckoutError(null); holdMutation.mutate(); }} disabled={selectedCount === 0 || unavailable || holdMutation.isPending} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">{holdMutation.isPending ? <><LoaderCircle aria-hidden="true" className="size-4 animate-spin" />Holding tickets…</> : "Continue"}</button>
+            <button type="button" onClick={() => {
+              if (!isLoggedIn) {
+                setCheckoutError("Please log in to hold tickets. Taking you to the login page…");
+                const here = `${window.location.pathname}${window.location.search}`;
+                window.setTimeout(() => router.push(loginRedirectPath(here)), 1200);
+                return;
+              }
+              setCheckoutError(null);
+              holdMutation.mutate();
+            }} disabled={selectedCount === 0 || unavailable || holdMutation.isPending} className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50">{holdMutation.isPending ? <><LoaderCircle aria-hidden="true" className="size-4 animate-spin" />Holding tickets…</> : "Continue"}</button>
             <p className="mt-3 text-xs leading-5 text-muted-foreground">Tickets are held for 10 minutes after this request succeeds.</p>
             <Link href={`/events/${params.eventId}`} className="mt-4 flex items-center justify-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground"><Ticket aria-hidden="true" className="size-4" />View event details</Link>
           </aside>

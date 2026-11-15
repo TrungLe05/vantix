@@ -110,6 +110,17 @@ export async function createTicketType(eventId: string, request: CreateTicketTyp
   return response.data.result;
 }
 
+// PR13 — tên/giá sửa được mọi lúc (trừ event đã hủy); số lượng chỉ cho GA khi event còn DRAFT (3304)
+export async function updateTicketType(ticketTypeId: string, request: {
+  name?: string; price?: number; totalQuantity?: number;
+}) {
+  const response = await apiClient.patch<ApiResponse<{
+    id: string; category: "SEATED" | "GENERAL_ADMISSION"; name: string; price: number; totalQuantity: number;
+  }>>(`/ticket-types/${ticketTypeId}`, request);
+  if (!response.data.result) throw new Error("Could not retrieve the updated ticket type");
+  return response.data.result;
+}
+
 export async function publishAdminEvent(eventId: string) {
   const response = await apiClient.patch<ApiResponse<AdminEvent>>(`/events/${eventId}/publish`);
   if (!response.data.result) throw new Error("Could not retrieve the event status");

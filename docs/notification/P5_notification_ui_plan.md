@@ -34,3 +34,10 @@ Không thêm dependency (D36). Thay đổi:
 - Đã chạy: `npx tsc --noEmit`, `npx eslint src e2e` (0 lỗi; 1 warning cũ ở `provider.tsx`), `npm run build`.
 - `npm run lint` toàn thư mục báo lỗi trong `.open-next/` (output build Cloudflare, đã gitignore nhưng chưa nằm trong ignore của ESLint) — không liên quan P5.
 - **Chưa** kiểm tra trên trình duyệt (camera, WebSocket qua Gateway), chưa có Playwright cho P5.
+
+## 5. Cập nhật 15/11/2026
+
+- `/check-in`: thay combobox bằng card các sự kiện `PUBLISHED` bắt đầu trong 7 ngày tới (chưa kết thúc), nhãn "Check-in open" / "Opens …" theo khung D44; chỉ chọn được sự kiện đã mở. Quét liên tục: không còn nút "Scan next ticket", mã trùng trong 4 giây bị bỏ qua, ô nhập tự focus lại sau mỗi lần gửi; kết quả mới nhất hiện lớn, 5 lần trước hiện dạng danh sách.
+- Trang đơn hàng: dialog hoàn tiền hiển thị lý do theo `reason` của OR10 và số vé đã dùng/sẽ hoàn (D43).
+- Trang chi tiết sự kiện và sơ đồ ghế: chưa đăng nhập mà bấm giữ vé → thông báo cần đăng nhập rồi chuyển `/login?reason=checkout&next=…`; đăng nhập xong quay lại trang cũ (`next` chỉ nhận đường dẫn nội bộ).
+- **Chưa** kiểm tra trên trình duyệt.

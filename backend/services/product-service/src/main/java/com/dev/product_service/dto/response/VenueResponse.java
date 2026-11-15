@@ -14,4 +14,6 @@ public class VenueResponse {
     private String name;
     private String address;
     private String city;
+    private java.math.BigDecimal latitude;
+    private java.math.BigDecimal longitude;
 }

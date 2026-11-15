@@ -70,6 +70,12 @@
 - Test: order 91 (thêm 7), user 19 (thêm 1), bot-detection 17 (pytest).
 - Quyết định mới D37–D42 (`DECISIONS.md`).
 
+### Sửa sau chạy thử (15/11/2026)
+- order-service: hoàn vé chưa dùng khi đơn có vé đã check-in (D43) — chỉ nhả kho phần chưa dùng; OR10 thêm `reason`, `refundableTickets`, `usedTickets`; check-in chỉ trong khung 3 giờ trước → kết thúc (D44, lỗi 4021); `ProductCatalog` đọc thêm `endAt`.
+- product-service: venue có `latitude`/`longitude` (migration V5, bắt buộc khi tạo, D45); PR13 sửa `totalQuantity` của GA khi event còn DRAFT (lỗi 3304).
+- Frontend: check-in dạng card + quét liên tục; dialog hoàn tiền báo đúng lý do; nhắc đăng nhập + quay lại sau khi đăng nhập; bảng sự kiện sắp theo nhóm; wizard sửa hạng vé tại chỗ; trang tạo STAFF; bản đồ Leaflet + Nominatim cho venue.
+- Test: order 95 (thêm 4), product 20 (thêm 2). Chưa kiểm tra UI trên trình duyệt.
+
 ## Đồng bộ tài liệu (13/11/2026)
 
 Đã đối chiếu docs API với code và sửa các điểm lệch:

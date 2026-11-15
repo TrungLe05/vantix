@@ -32,7 +32,8 @@ public enum ProductErrorCode implements ErrorCode {
     // 33xx — TicketType
     TICKET_TYPE_NOT_FOUND(3301, "Không tìm thấy hạng vé", HttpStatus.NOT_FOUND),
     GA_QUANTITY_REQUIRED(3302, "Hạng vé GA phải có số lượng lớn hơn 0", HttpStatus.BAD_REQUEST),
-    SEAT_IDS_REQUIRED_FOR_SEATED(3303, "Hạng vé SEATED phải gán ít nhất một ghế", HttpStatus.BAD_REQUEST);
+    SEAT_IDS_REQUIRED_FOR_SEATED(3303, "Hạng vé SEATED phải gán ít nhất một ghế", HttpStatus.BAD_REQUEST),
+    TICKET_QUANTITY_NOT_EDITABLE(3304, "Chỉ sửa được số lượng của hạng vé GA khi sự kiện còn nháp", HttpStatus.CONFLICT);
 
     private final int code;
     private final String message;

@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, ChevronDown, LogOut, MapPin, ShieldAlert } from "lucide-react";
+import { CalendarDays, ChevronDown, LogOut, MapPin, ShieldAlert, Users } from "lucide-react";
 import { logout } from "@/lib/api/auth";
 import { useAuthStore } from "@/store/auth-store";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -12,6 +12,7 @@ const adminLinks = [
   { href: "/admin/venues", label: "Venues", icon: MapPin },
   { href: "/admin/events", label: "Events", icon: CalendarDays },
   { href: "/admin/bot-flags", label: "Bot review", icon: ShieldAlert },
+  { href: "/admin/staff", label: "Staff", icon: Users },
 ] as const;
 
 export default function AdminLayout({ children }: { children: ReactNode }) {

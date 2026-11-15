@@ -14,12 +14,22 @@ import {
   createSeatMap,
   createTicketType,
   publishAdminEvent,
+  updateTicketType,
   type AdminEvent,
   type AdminSeat,
 } from "@/lib/api/admin-events";
 import { getVenues } from "@/lib/api/venues";
 
 const steps = ["Details", "Seats & tickets", "Publish"];
+
+interface CreatedTicketType {
+  id: string;
+  category: "SEATED" | "GENERAL_ADMISSION";
+  name: string;
+  price: number;
+  totalQuantity: number;
+  seatLabels: string[];
+}
 
 function toIso(value: string) {
   return value ? new Date(value).toISOString() : undefined;
@@ -31,7 +41,8 @@ export default function NewAdminEventPage() {
   const [event, setEvent] = useState<AdminEvent | null>(null);
   const [createdSeats, setCreatedSeats] = useState<AdminSeat[]>([]);
   const [seatMapId, setSeatMapId] = useState<string | null>(null);
-  const [createdTicketCount, setCreatedTicketCount] = useState(0);
+  const [createdTypes, setCreatedTypes] = useState<CreatedTicketType[]>([]);
+  const createdTicketCount = createdTypes.length;
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [assignedSeatIds, setAssignedSeatIds] = useState<string[]>([]);
   const [published, setPublished] = useState(false);
@@ -142,11 +153,18 @@ export default function NewAdminEventPage() {
       return;
     }
     try {
-      await createTicketType(event.id, category === "SEATED"
+      const created = await createTicketType(event.id, category === "SEATED"
         ? { category, name: ticketLabel, price: ticketPrice, seatIds: selectedSeatIds }
         : { category, name: ticketLabel, price: ticketPrice, totalQuantity: Number(formData.get("quantity")) });
       if (category === "SEATED") setAssignedSeatIds((ids) => [...ids, ...selectedSeatIds]);
-      setCreatedTicketCount((count) => count + 1);
+      setCreatedTypes((types) => [...types, {
+        id: created.id,
+        category,
+        name: ticketLabel,
+        price: ticketPrice,
+        totalQuantity: created.totalQuantity,
+        seatLabels: createdSeats.filter((seat) => selectedSeatIds.includes(seat.id)).map((seat) => seat.displayLabel),
+      }]);
       setTicketName("");
       setPrice("");
       setQuantity("");
@@ -246,6 +264,21 @@ export default function NewAdminEventPage() {
               {category === "GENERAL_ADMISSION" ? <div className="space-y-2"><Label htmlFor="ticket-quantity">Quantity</Label><Input id="ticket-quantity" name="quantity" type="number" min="1" step="1" required value={quantity} onChange={(e) => setQuantity(e.target.value)} /></div> : null}
               <div className="flex flex-col-reverse justify-between gap-3 md:col-span-2 sm:flex-row"><Button type="button" variant="outline" onClick={() => setStep(1)}>Back</Button><Button type="submit">Create ticket type<ArrowRight aria-hidden="true" /></Button></div>
             </form>
+            {createdTypes.length > 0 ? (
+              <section aria-labelledby="created-types-title" className="space-y-3">
+                <h3 id="created-types-title" className="text-sm font-semibold">Ticket types in this event</h3>
+                <ul className="space-y-3">
+                  {createdTypes.map((type) => (
+                    <TicketTypeEditor
+                      key={type.id}
+                      type={type}
+                      quantityEditable={!published && type.category === "GENERAL_ADMISSION"}
+                      onSaved={(saved) => setCreatedTypes((types) => types.map((t) => (t.id === saved.id ? saved : t)))}
+                    />
+                  ))}
+                </ul>
+              </section>
+            ) : null}
             {createdTicketCount > 0 ? <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4"><p className="font-semibold text-primary">{createdTicketCount} ticket types created. Add more above or publish the event.</p><div className="flex justify-end"><Button type="button" onClick={publishEvent} disabled={publishMutation.isPending || published}>{publishMutation.isPending ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : published ? <Check aria-hidden="true" /> : null}{published ? "Published" : "Publish event"}</Button></div></div> : null}
             {published ? <p role="status" aria-live="polite" className="rounded-xl bg-primary/5 p-4 text-sm font-medium">Event published successfully. <Link href="/admin/events" className="underline">Back to event list</Link></p> : null}
             <p className="text-xs leading-5 text-muted-foreground">If publishing fails, the API returns the missing requirements. Previously saved steps remain on the backend.</p>
@@ -253,5 +286,89 @@ export default function NewAdminEventPage() {
         ) : null}
       </section>
     </div>
+  );
+}
+
+function TicketTypeEditor({ type, quantityEditable, onSaved }: {
+  type: CreatedTicketType;
+  quantityEditable: boolean;
+  onSaved: (type: CreatedTicketType) => void;
+}) {
+  const [name, setName] = useState(type.name);
+  const [price, setPrice] = useState(String(type.price));
+  const [quantity, setQuantity] = useState(String(type.totalQuantity));
+  const [saved, setSaved] = useState(false);
+  const priceValue = Number(price);
+  const quantityValue = Number(quantity);
+  const mutation = useMutation({
+    mutationFn: () => updateTicketType(type.id, {
+      name: name.trim() !== type.name ? name.trim() : undefined,
+      price: priceValue !== type.price ? priceValue : undefined,
+      totalQuantity: quantityEditable && quantityValue !== type.totalQuantity ? quantityValue : undefined,
+    }),
+    onSuccess: (result) => {
+      onSaved({ ...type, name: result.name, price: result.price, totalQuantity: result.totalQuantity });
+      setSaved(true);
+    },
+  });
+  const invalid = !name.trim() || !Number.isFinite(priceValue) || priceValue < 0
+    || (quantityEditable && (!Number.isInteger(quantityValue) || quantityValue < 1));
+  const dirty = name.trim() !== type.name || priceValue !== type.price
+    || (quantityEditable && quantityValue !== type.totalQuantity);
+
+  return (
+    <li className="rounded-xl border border-border bg-background p-4">
+      <form
+        className="grid gap-3 sm:grid-cols-[1fr_8rem_8rem_auto] sm:items-end"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSaved(false);
+          if (!invalid && dirty) mutation.mutate();
+        }}
+      >
+        <div className="space-y-1">
+          <Label htmlFor={`type-name-${type.id}`} className="text-xs">
+            {type.category === "SEATED" ? "Reserved seating" : "General admission"} · name
+          </Label>
+          <Input id={`type-name-${type.id}`} value={name} maxLength={200} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor={`type-price-${type.id}`} className="text-xs">Price (USD)</Label>
+          <Input id={`type-price-${type.id}`} type="number" min="0" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor={`type-qty-${type.id}`} className="text-xs">Quantity</Label>
+          <Input
+            id={`type-qty-${type.id}`}
+            type="number"
+            min="1"
+            step="1"
+            value={quantity}
+            disabled={!quantityEditable}
+            onChange={(e) => setQuantity(e.target.value)}
+          />
+        </div>
+        <Button type="submit" variant="outline" disabled={invalid || !dirty || mutation.isPending}>
+          {mutation.isPending ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : null}
+          Save
+        </Button>
+      </form>
+      {type.seatLabels.length > 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Seats: {type.seatLabels.slice(0, 24).join(", ")}
+          {type.seatLabels.length > 24 ? ` and ${type.seatLabels.length - 24} more` : ""}
+        </p>
+      ) : null}
+      {type.category === "SEATED" ? (
+        <p className="mt-1 text-xs text-muted-foreground">Quantity follows the assigned seats.</p>
+      ) : !quantityEditable ? (
+        <p className="mt-1 text-xs text-muted-foreground">Quantity is locked after publishing.</p>
+      ) : null}
+      {mutation.isError ? (
+        <p role="alert" className="mt-2 text-sm text-destructive">{getErrorMessage(mutation.error)}</p>
+      ) : saved ? (
+        <p role="status" className="mt-2 text-sm text-primary">Saved.</p>
+      ) : null}
+    </li>
   );
 }

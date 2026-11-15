@@ -33,6 +33,13 @@ public class Venue {
     @Column(nullable = false)
     private String city;
 
+    // D45: NULL với venue tạo trước khi bắt buộc tọa độ
+    @Column(precision = 9, scale = 6)
+    private java.math.BigDecimal latitude;
+
+    @Column(precision = 9, scale = 6)
+    private java.math.BigDecimal longitude;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

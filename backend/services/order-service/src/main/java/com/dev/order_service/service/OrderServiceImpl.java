@@ -241,19 +241,37 @@ public class OrderServiceImpl implements OrderService {
         OrderResponse current = orderCommandService.getOwned(buyerId, orderId);
         Instant eventStartAt = null;
         int percent = 0;
-        if (isPaid(current)) {
+        String reason = null;
+        BigDecimal base = current.getTotalAmount();
+        int unused = 0;
+        int used = 0;
+        if (current.getStatus() == OrderStatus.REFUND_PENDING || current.getStatus() == OrderStatus.REFUNDED) {
+            reason = "ALREADY_REFUNDED";
+        } else if (!isPaid(current)) {
+            reason = "NOT_PAID";
+        } else {
             eventStartAt = catalogValidationService.eventStartAt(current.getEventId());
+            OrderCommandService.RefundBase refundBase = orderCommandService.refundBase(orderId);
+            unused = refundBase.unusedTickets();
+            used = refundBase.usedTickets();
+            base = used > 0 ? refundBase.unusedAmount() : current.getTotalAmount();
             percent = RefundPolicy.percent(Instant.now(), eventStartAt);
-            // Đơn đã có vé check-in thì OR11 từ chối, quote phải nói trước điều đó
-            if (current.getTickets().stream().anyMatch(t -> t.getStatus() == TicketStatus.CHECKED_IN)) {
+            // D43: lý do cụ thể để UI không phải đoán (trước đây vé đã quét hiện nhầm "< 24 giờ")
+            if (unused == 0) {
                 percent = 0;
+                reason = "ALL_TICKETS_USED";
+            } else if (percent == 0) {
+                reason = "TOO_CLOSE_TO_EVENT";
             }
         }
         return RefundQuoteResponse.builder()
                 .orderId(orderId)
                 .refundable(percent > 0)
                 .percent(percent)
-                .amount(RefundPolicy.amount(current.getTotalAmount(), percent))
+                .reason(reason)
+                .refundableTickets(unused)
+                .usedTickets(used)
+                .amount(RefundPolicy.amount(base, percent))
                 .currency(current.getCurrency())
                 .paidAmount(current.getTotalAmount())
                 .eventStartAt(eventStartAt)

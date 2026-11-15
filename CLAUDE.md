@@ -114,7 +114,8 @@ Vantix là nền tảng bán vé sự kiện (vé ghế số SEATED + vé đứn
 
 | Đường dẫn | Nội dung |
 |---|---|
-| `docs/CONTEXT.md` | Tóm tắt ngắn để dán cho AI. **Đang lệch**: còn ghi OTP ở bảng `USER_OTP` (thực tế đã chuyển sang Redis) — cập nhật khi có dịp |
+| `docs/CONTEXT.md` | Tóm tắt ngắn để dán cho AI (đồng bộ 15/11/2026, gồm quyết định P4–P6) |
+| `docs/SESSION_HANDOFF.md` | Bàn giao ngữ cảnh cho session AI kế tiếp (nhánh, PR, việc BLOCKED) |
 | `docs/00_roadmap_phases_v1.md` | Roadmap P0–P9, FR, service boundaries |
 | `docs/P0_infrastructure_summary.md`, `docs/P0_frontend_setup.md` | Hạ tầng, setup frontend |
 | `docs/auth/` | `P1_auth_design.md`, `P1_auth_api_design.md` (API đã khớp code, **mới hơn** design) |

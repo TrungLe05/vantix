@@ -1,6 +1,6 @@
 # Vantix — Kiến trúc hệ thống
 
-> Tài liệu tổng hợp theo code tại nhánh `feature/order-service` (13/11/2026). Chi tiết từng phase nằm ở `docs/`. Khi code và tài liệu lệch nhau, code là sự thật.
+> Tài liệu tổng hợp theo code tại nhánh `fix/bot-false-positives` (15/11/2026, gồm P0–P6 và các sửa sau chạy thử D43–D46). Chi tiết từng phase nằm ở `docs/`. Khi code và tài liệu lệch nhau, code là sự thật.
 
 ## 1. Tổng quan
 
@@ -16,24 +16,33 @@ flowchart LR
     GW --> AS[assistant :9006 Python]
 
     OS -- OpenFeign --> PS
-    OS -. sync REST P4 .-> PAY
-    STRIPE[Stripe] -. webhook P4 .-> PAY
+    OS -- REST /internal --> PAY
+    STRIPE[Stripe] -- webhook --> PAY
+    NS -- REST /internal --> US
+    BD -- REST /internal --> US
 
     US -- Kafka --> K[(Kafka)]
     PS -- outbox → Kafka --> K
     OS -- outbox → Kafka --> K
+    PAY -- outbox → Kafka --> K
+    BD -- Kafka --> K
     K --> OS
-    K -. P5 .-> NS
-    K -. P6 .-> BD
+    K --> PAY
+    K --> NS
+    K --> BD
+    AS -.- X[P7 chưa code]
 
     US --- PGU[(users_service)]
     PS --- PGP[(products_service)]
     OS --- PGO[(orders_service)]
+    PAY --- PGPAY[(payments_service)]
+    NS --- PGN[(notifications_service)]
     US --- R[(Redis)]
     OS --- R
+    BD --- R
 ```
 
-Nét liền: đã có trong code. Nét đứt: thiết kế, chưa code.
+Nét liền: đã có trong code. Nét đứt: thiết kế, chưa code. API `/internal/**` chỉ cho service gọi, không route qua Gateway.
 
 ## 2. Service
 
@@ -42,10 +51,10 @@ Nét liền: đã có trong code. Nét đứt: thiết kế, chưa code.
 | api-gateway | 8999 | — | Entry point, verify JWT, inject `X-User-Id`/`X-User-Role`, CORS, routing | Có |
 | user-service | 9004 | `users_service` | Đăng ký, OTP email, login, refresh rotation, Google OAuth2, tạo STAFF | Có (P1) |
 | product-service | 9003 | `products_service` | Catalog: venue, event, seat map/seat, ticket type, giá gốc | Có (P2) |
-| order-service | 9001 | `orders_service` | Giỏ, hold, tồn kho giao dịch, availability, nhận kết quả thanh toán, tính % hoàn; sau này vé/QR, check-in | Có (P3, P4) |
+| order-service | 9001 | `orders_service` | Giỏ, hold, tồn kho giao dịch, availability, nhận kết quả thanh toán, tính % hoàn, vé/QR, check-in, `bot_flags` | Có (P3–P6) |
 | payment-service | 9002 | `payments_service` | Stripe Checkout session, webhook, refund — chỉ biết tiền | Có (P4, chưa chạy với Stripe thật) |
-| notification-service | 9000 | `notifications_service` | Consume Kafka, gửi email, WebSocket, bảng `notifications` | Có (P5) |
-| bot-detection | 9005 | — (Redis DB 2) | Isolation Forest chấm điểm `cart.item_added` | P6: consumer/producer Kafka, model offline, BD01–BD03 |
+| notification-service | 9000 | `notifications_service` | Consume Kafka, gửi email, WebSocket, bảng `notifications` | Có (P5, chưa chạy E2E Kafka/SMTP thật) |
+| bot-detection | 9005 | — (Redis DB 2) | Isolation Forest chấm điểm `cart.item_added`, phát `riskLevel` + `ruleMatched` | Có (P6): consumer/producer Kafka, model offline, BD01–BD03 |
 | assistant | 9006 | — | Trợ lý LLM, stateless | Chỉ `/health` |
 
 Service Java đều có `server.servlet.context-path: /api`. Gateway route theo prefix: `/api/users/**, /api/auth/**, /api/oauth2/**, /api/login/oauth2/**` → user; `/api/events/**, /api/venues/**, /api/ticket-types/**, /api/products/**` → product; `/api/orders/**` → order; `/api/payments/**`, `/api/notifications/**`, `/api/bot-detection/**`, `/api/assistant/**`.
@@ -55,9 +64,9 @@ Service Java đều có `server.servlet.context-path: /api`. Gateway route theo 
 | Artifact | Nội dung | Dùng bởi |
 |---|---|---|
 | `commonlib-api-response` | `ApiResponse<T>`, `ErrorCode`, `CommonErrorCode` (1xxx), `AppException`, `BaseGlobalExceptionHandler` | Mọi service Java |
-| `commonlib-security` | `GatewayHeaderAuthFilter`, `SecurityUtils` (servlet) | user, product, order |
+| `commonlib-security` | `GatewayHeaderAuthFilter`, `SecurityUtils` (servlet) | user, product, order, payment, notification |
 | `commonlib-jwt` | `JwtUtils`, `JwtClaims`, `JwtProperties` | user (phát hành), gateway (verify) |
-| `commonlib-kafka` | `KafkaProducerConfig` (idempotent producer, `JacksonJsonSerializer`), `KafkaTopics`, event record | user, product, order |
+| `commonlib-kafka` | `KafkaProducerConfig` (idempotent producer, `JacksonJsonSerializer`), `KafkaTopics`, event record | user, product, order, payment, notification |
 
 ## 4. Xác thực — Trust-The-Gateway
 
@@ -87,10 +96,12 @@ sequenceDiagram
 | DB | Bảng chính | Migration |
 |---|---|---|
 | `users_service` | `users` (partial unique email khi `deleted_at IS NULL`), `refresh_tokens` | V1, V2 |
-| `products_service` | `venues`, `events`, `seat_maps`, `seats`, `ticket_types`, `event_outbox` | V1–V3 (V2 seed event) |
-| `orders_service` | `orders`, `order_items`, `holds`, `ticket_inventory`, `cancelled_events`, `idempotency_keys`, `order_event_outbox` | V1 |
+| `products_service` | `venues` (có `latitude`/`longitude`), `events`, `seat_maps`, `seats`, `ticket_types`, `event_outbox` | V1–V5 (V2 seed event, V4 dead-letter outbox, V5 tọa độ venue) |
+| `orders_service` | `orders`, `order_items`, `holds`, `ticket_inventory`, `cancelled_events`, `idempotency_keys`, `order_event_outbox`, `order_refunds`, `tickets`, `bot_flags` | V1–V6 (V2 dead-letter, V3 thanh toán/hoàn, V4 vé, V5 `bot_flags`, V6 trạng thái `WATCH`) |
+| `payments_service` | `payments`, `refunds`, `stripe_webhook_events`, `payment_event_outbox` | V1 |
+| `notifications_service` | `notifications` (idempotent theo `dedup_key`) | V1 |
 
-Redis: `otp:{purpose}:{userId}`, `otp:cooldown:{purpose}:{userId}`, `oauth:code:{code}` (user); `order:hold:seat:{seatId}`, `order:hold:ga:{holdId}` (order).
+Redis: `otp:{purpose}:{userId}`, `otp:cooldown:{purpose}:{userId}`, `oauth:code:{code}` (user); `order:hold:seat:{seatId}`, `order:hold:ga:{holdId}`, `order:device-view:{deviceHash}:{eventId}` (order); DB 2 tiền tố `bot:` — cửa sổ trượt theo buyer/thiết bị và cache `bot:account:{buyerId}` 24 giờ (bot-detection).
 
 ## 6. Kafka
 
@@ -111,9 +122,9 @@ Key = id aggregate. Consumer phải idempotent vì outbox có thể phát lặp.
 
 Luồng tiền (P4, chi tiết `docs/payment/`): buyer gọi Order `POST /orders/{id}/checkout` → Order gọi Payment đồng bộ qua API nội bộ `/api/internal/payments/**` (không route ở Gateway) lấy link Stripe Checkout → Stripe gọi webhook `/api/payments/webhooks/stripe` (xác thực chữ ký, idempotent theo event id) → `payment.succeeded` → Order `PAID`. Tiền vào khi Order đã hết hạn/bị hủy thì hoàn 100%. Hoàn tiền: Order tính % và phát `order.refund-requested`, Payment thực thi qua Stripe.
 
-Vé và thông báo (P5, chi tiết `docs/notification/`): `payment.succeeded` → Order phát hành vé (mã ngẫu nhiên, QR sinh ở backend) và chuyển `TICKETS_ISSUED` trong cùng transaction → `order.tickets-issued` → Notification lưu `notifications`, đẩy WebSocket (ticket một lần qua `POST /api/notifications/ws-ticket`, rồi `GET /api/notifications/ws?ticket=`) và gửi email (lấy địa chỉ qua `GET /api/internal/users/{id}/contact`). Check-in `POST /api/orders/tickets/check-in` (ADMIN/STAFF) bằng update có điều kiện; quét trùng trả 4017 kèm lần quét đầu.
+Vé và thông báo (P5, chi tiết `docs/notification/`): `payment.succeeded` → Order phát hành vé (mã ngẫu nhiên, QR sinh ở backend) và chuyển `TICKETS_ISSUED` trong cùng transaction → `order.tickets-issued` → Notification lưu `notifications`, đẩy WebSocket (ticket một lần qua `POST /api/notifications/ws-ticket`, rồi `GET /api/notifications/ws?ticket=`) và gửi email (lấy địa chỉ qua `GET /api/internal/users/{id}/contact`). Check-in `POST /api/orders/tickets/check-in` (ADMIN/STAFF) bằng update có điều kiện; quét trùng trả 4017 kèm lần quét đầu; chỉ mở từ 3 giờ trước giờ bắt đầu tới giờ kết thúc sự kiện, ngoài khung trả 4021 (D44). Hủy đơn có vé đã check-in → chỉ hoàn % cho vé chưa dùng và chỉ nhả kho phần đó (D43).
 
-Bot-detection (P6, chi tiết `docs/bot-detection/`): frontend gửi `X-Device-Id` (UUID ngẫu nhiên), Order chỉ giữ HMAC; availability ghi lần xem đầu; `cart.item_added` → bot-detection tính feature theo cửa sổ Redis + tuổi tài khoản (`GET /api/internal/users/{id}/account`) → Isolation Forest → `bot_score.evaluated` → Order: `HIGH` tạo `bot_flags`, các lần thêm giỏ sau của buyer/thiết bị đó bị chặn 4019 (hold cũ giữ nguyên), ADMIN gỡ ở `/api/orders/bot-flags`.
+Bot-detection (P6, chi tiết `docs/bot-detection/`): frontend gửi `X-Device-Id` (UUID ngẫu nhiên), Order chỉ giữ HMAC; availability ghi lần xem đầu; `cart.item_added` → bot-detection tính feature theo cửa sổ Redis + tuổi tài khoản (`GET /api/internal/users/{id}/account`) → Isolation Forest + luật tay → `bot_score.evaluated` (`riskLevel`, `ruleMatched`) → Order: `HIGH` kèm `ruleMatched` tạo `bot_flags` `ACTIVE`; `HIGH` đơn lẻ tạo `WATCH` (không chặn), `HIGH` lần hai nâng lên `ACTIVE` (D46). Flag `ACTIVE` chặn các lần thêm giỏ sau của buyer/thiết bị đó bằng 4019 (hold cũ giữ nguyên); ADMIN xem/gỡ ở `/api/orders/bot-flags`.
 
 ## 7. Order — chống bán trùng (P3)
 
@@ -140,14 +151,15 @@ sequenceDiagram
 - Lớp 2 — **Redis TTL**: chặn nhanh ghế đang giữ, tín hiệu hết hạn.
 - Lớp 3 — **PostgreSQL**: `uq_holds_active_seat`, `uq_orders_buyer_event_cart`, CHECK `held + sold <= total`, update có điều kiện. Đây là lớp quyết định.
 - Hết hạn: `OrderExpirationScheduler` mỗi 1 giây + expire khi đọc; nhả tồn đúng một lần.
-- State: Order `CART → PENDING_PAYMENT → (PAID → TICKETS_ISSUED ở P4)`, hoặc `EXPIRED`/`CANCELLED`. Hold `HELD → CONFIRMED → PURCHASED`, hoặc `RELEASED`/`EXPIRED`.
+- State: Order `CART → PENDING_PAYMENT → PAID → TICKETS_ISSUED → (REFUND_PENDING → REFUNDED)`, hoặc `EXPIRED`/`CANCELLED`. Hold `HELD → CONFIRMED → PURCHASED`, hoặc `RELEASED`/`EXPIRED`.
 - Availability public (`GET /orders/events/{id}/availability`) để UI ghép với seat map tĩnh của Product, refetch 15 giây.
 
 ## 8. Frontend
 
-`frontend/src/app`: `(auth)` login/register/verify/forgot/reset/auth-callback; `(main)` discovery, event detail, seat map, orders, profile, 403/500; `(admin)` events, venues. API client `src/lib/api` serialize refresh (một request refresh duy nhất), access token chỉ giữ trong bộ nhớ (Zustand `auth-store`).
+`frontend/src/app`: `(auth)` login (có `?reason=checkout&next=` để quay lại sau khi đăng nhập)/register/verify/forgot/reset/change-password/auth-callback; `(main)` discovery, event detail, seat map, orders (thanh toán, hoàn tiền, vé + QR), profile, check-in (ADMIN/STAFF), 403/500; `(admin)` events (wizard sửa hạng vé), venues (bản đồ Leaflet + Nominatim), staff, bot-flags. Mọi request gửi `X-Device-Id` (UUID trong localStorage, D37); chuông thông báo dùng WebSocket. API client `src/lib/api` serialize refresh (một request refresh duy nhất), access token chỉ giữ trong bộ nhớ (Zustand `auth-store`).
 
 ## 9. Hạ tầng & CI
 
 - `docker-compose.yml`: postgres, pgAdmin, redis, RedisInsight, kafka (KRaft), kafka-ui. `docker-compose.prod.yml` và `Dockerfile` gốc còn rỗng.
-- GitHub Actions `ci.yml`: phát hiện thay đổi theo thư mục, commitlint, backend `mvn clean verify`, frontend lint + `tsc --noEmit` + build.
+- GitHub Actions `ci.yml`: phát hiện thay đổi theo thư mục, commitlint, backend `mvn clean verify` (service container Postgres + Redis, DB `*_test`), frontend lint + `tsc --noEmit` + build, bot-detection `pytest` (Python 3.12 + Redis), secret scan, dependency review.
+- Test (15/11/2026): backend 181 (gateway 12, notification 14, order 97, payment 19, product 20, user 19), bot-detection 18 pytest, Playwright `frontend/e2e` cho P1–P3, k6 `order-service/k6` (tranh ghế/GA) và `bot-detection-service/datagen` (sinh dữ liệu).

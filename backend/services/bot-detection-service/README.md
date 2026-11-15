@@ -7,7 +7,7 @@ Isolation Forest đã huấn luyện offline, publish `bot_score.evaluated`. Thi
 app/        config, features (Redis + bộ nhớ), model, scoring, consumer, user_client, main (API BD01–BD03)
 model/      isolation_forest.joblib + model_meta.json (artifact commit vào repo, D40)
 datagen/    sinh dữ liệu: run_stack.py, seed_accounts.py, setup_events.py, traffic.js (k6), export_events.py
-training/   build_dataset.py, train.py, make_notebook.py, data/ (log + feature, không PII), reports/, notebooks/
+training/   build_dataset.py, train.py, evaluate_policy.py (D46), make_notebook.py, data/ (log + feature, không PII), reports/, notebooks/
 tests/      pytest (test Redis tự skip nếu không có Redis; CI có service container)
 ```
 
@@ -53,6 +53,11 @@ Lặp lại cho vòng B (tập test). Sau đó:
 
 ```bash
 python -I -X utf8 training/build_dataset.py A B && python -I -X utf8 training/train.py && python -I -X utf8 training/make_notebook.py
+```
+So sánh chính sách chặn (D46) trên tập test, ghi `training/reports/policy.json`:
+
+```bash
+python -I -X utf8 training/evaluate_policy.py
 ```
 ```bash
 python -I -X utf8 datagen/run_stack.py stop

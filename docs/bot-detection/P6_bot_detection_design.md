@@ -1,13 +1,13 @@
 # Vantix — Phase 6: Bot Detection Design
 
 > **Trạng thái:** Thiết kế chốt và triển khai 15/11/2026. Lựa chọn của chủ repo (15/11/2026): device ID ngẫu nhiên không dùng thư viện fingerprint, chặn + trang review cho ADMIN, báo cáo bằng Jupyter notebook + script.
-> **Liên quan:** ../00_roadmap_phases_v1.md (P6), ../order/P3_order_design.md, P6_bot_detection_api_design.md, P6_bot_detection_ui_plan.md, P6_bot_detection_report.md, `DECISIONS.md` D37–D42.
+> **Liên quan:** ../00_roadmap_phases_v1.md (P6), ../order/P3_order_design.md, P6_bot_detection_api_design.md, P6_bot_detection_ui_plan.md, P6_bot_detection_report.md, `DECISIONS.md` D37–D42, D46.
 
 ## 1. Mục tiêu và nguyên tắc
 
 - Isolation Forest (không giám sát) chấm điểm **mỗi lần thêm vé vào giỏ**; dữ liệu huấn luyện **tự tạo** bằng k6 (bot + người dùng mô phỏng) vì không có dataset công khai phù hợp (roadmap).
 - Order → bot-detection **bất đồng bộ** qua Kafka: thêm giỏ không chậm đi, bot-detection sập thì bán vé vẫn chạy (fail open — khác Product fail closed vì đây là lớp phòng vệ bổ sung, không phải điều kiện đúng đắn).
-- Rủi ro cao → **chặn các lần thêm giỏ tiếp theo** của tài khoản đó và thiết bị đó + đánh dấu để ADMIN review. **Không hủy hold hiện tại** (model có thể sai).
+- Rủi ro cao kèm luật tay, hoặc rủi ro cao lặp lại (D46) → **chặn các lần thêm giỏ tiếp theo** của tài khoản đó và thiết bị đó + đánh dấu để ADMIN review; rủi ro cao đơn lẻ chỉ theo dõi (`WATCH`). **Không hủy hold hiện tại** (model có thể sai).
 - Dữ liệu cá nhân (liên kết P8): feature không chứa tên/email/IP; thiết bị chỉ đi dưới dạng **HMAC** (`deviceHash`), device ID thô không rời order-service.
 
 ## 2. Quyết định
@@ -43,8 +43,8 @@ sequenceDiagram
     K->>B: consume
     B->>U: GET /internal/users/{id}/account (cache 24h)
     B->>B: cập nhật cửa sổ Redis, tính feature, Isolation Forest
-    B->>K: bot_score.evaluated {anomalyScore, riskLevel, features}
-    K->>O: consume: HIGH → bot_flags ACTIVE
+    B->>K: bot_score.evaluated {anomalyScore, riskLevel, ruleMatched, features}
+    K->>O: consume: HIGH + ruleMatched → ACTIVE; HIGH đơn lẻ → WATCH; HIGH khi đã WATCH → ACTIVE
     F->>O: POST /orders lần sau → 4019 (hold cũ giữ nguyên)
 ~~~
 
@@ -63,20 +63,20 @@ sequenceDiagram
 | `buyer_events_1h` | Số event khác nhau tài khoản thêm giỏ trong 1 giờ | gom vé nhiều sự kiện |
 | `has_device` | Request có `X-Device-Id` hợp lệ | client tự viết thường không gửi |
 
-## 5. Mô hình dữ liệu (`orders_service` — `V5__bot_flags.sql`)
+## 5. Mô hình dữ liệu (`orders_service` — `V5__bot_flags.sql`, `V6__bot_flags_watch.sql`)
 
 ~~~mermaid
 erDiagram
     BOT_FLAGS {
         uuid id PK
-        uuid buyer_id "UNIQUE khi status = ACTIVE"
+        uuid buyer_id "UNIQUE khi status IN (WATCH, ACTIVE)"
         string device_hash "HMAC, có thể null"
         uuid order_id "lần thêm giỏ bị gắn cờ gần nhất"
         uuid event_id
         numeric score "điểm cao nhất"
         string model_version
         jsonb features "feature của lần cao nhất"
-        string status "ACTIVE | CLEARED"
+        string status "WATCH | ACTIVE | CLEARED"
         int hit_count
         timestamp first_flagged_at
         timestamp last_flagged_at
@@ -85,14 +85,14 @@ erDiagram
     }
 ~~~
 
-Bản tin `HIGH` lặp lại cho buyer đang ACTIVE → cộng `hit_count`, giữ điểm cao nhất. Bản tin có `evaluatedAt` cũ hơn lần ADMIN gỡ gần nhất của buyer bị bỏ qua (Kafka phát lại không gắn cờ lại).
+Mỗi buyer có tối đa một flag mở (`WATCH` hoặc `ACTIVE`, index `uq_bot_flags_open_buyer` từ V6). Flag mới: `ACTIVE` nếu `ruleMatched`, ngược lại `WATCH`. Bản tin `HIGH` lặp lại cho buyer đang có flag mở → luôn thành `ACTIVE`, cộng `hit_count`, giữ điểm cao nhất. Chỉ `ACTIVE` chặn 4019. Bản tin có `evaluatedAt` cũ hơn lần ADMIN gỡ gần nhất của buyer bị bỏ qua (Kafka phát lại không gắn cờ lại).
 
 ## 6. Sinh dữ liệu, huấn luyện, đánh giá
 
-- k6 (`bot-detection-service/k6/traffic.js`) chạy qua Gateway thật trên stack `*_e2e`: kịch bản **người dùng** (xem sự kiện, suy nghĩ 5–90 giây, mua 1–4 vé, mỗi người một thiết bị) và ba kiểu **bot** (dồn dập không xem trang; xem trang nhưng không chờ; xoay thiết bị/nhiều tài khoản trên ít thiết bị).
+- k6 (`bot-detection-service/datagen/traffic.js`) chạy qua Gateway thật trên stack `*_e2e`: kịch bản **người dùng** (xem sự kiện, suy nghĩ 5–90 giây, mua 1–4 vé, mỗi người một thiết bị) và ba kiểu **bot** (dồn dập không xem trang; xem trang nhưng không chờ; xoay thiết bị/nhiều tài khoản trên ít thiết bị).
 - Tài khoản seed trực tiếp ở `users_service_e2e` với `created_at` khác nhau; nhãn = tiền tố email (`dg-human-*`, `dg-bot-*`) — chỉ script đánh giá biết nhãn, model không thấy.
 - Bản tin `cart.item_added` được ghi lại (JSONL, không PII) rồi **tái hiện offline bằng cùng code feature** → dataset CSV. Dataset chia train/validation/test **theo tài khoản** (một tài khoản chỉ nằm ở một tập). Model học trên tập train **không có nhãn** (trộn bot và người); nhãn chỉ dùng để chọn ngưỡng trên validation và đo kết quả trên test.
-- Báo cáo: `training/notebooks/P6_bot_detection_report.ipynb` (EDA, feature, đánh giá) + `docs/bot-detection/P6_bot_detection_report.md` (tóm tắt và giới hạn).
+- Báo cáo: `training/notebooks/P6_bot_detection_report.ipynb` (EDA, feature, đánh giá) + `docs/bot-detection/P6_bot_detection_report.md` (tóm tắt và giới hạn). `training/evaluate_policy.py` so sánh chính sách chặn (D46) → `training/reports/policy.json`.
 
 ## 7. Giới hạn đã biết
 

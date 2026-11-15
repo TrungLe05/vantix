@@ -30,7 +30,7 @@ docs/      ← tài liệu thiết kế theo phase (nguồn sự thật)
 | bot-detection (Python) | 9005 | — |
 | assistant (Python) | 9006 | — |
 
-Tên DB lấy theo `application.yaml` của từng service. Compose không tự tạo DB → tạo trước khi chạy service, nếu không Flyway lỗi.
+Tên DB lấy theo `application.yaml` của từng service. Compose tự tạo 5 DB (`docker/postgres/init/01-create-databases.sql`) chỉ khi volume Postgres còn trống; volume cũ thì chạy tay script (README), nếu không Flyway lỗi.
 
 Mọi service Java có `server.servlet.context-path: /api` → `@RequestMapping` KHÔNG thêm tiền tố `/api` (vd `/auth/login`, không phải `/api/auth/login`).
 
@@ -77,13 +77,14 @@ Mọi service Java có `server.servlet.context-path: /api` → `@RequestMapping`
 - Comment bằng tiếng Việt, giải thích "tại sao", không lặp lại "code làm gì".
 
 ## Phase hiện tại
-- P0 hạ tầng, P1 User & Auth (`docs/auth/`), P2 Product (`docs/product/`): xong phần API, còn thiếu test.
-- P3 Order (`docs/order/`): đã code, còn chạy E2E + k6 và test concurrency.
-- P4–P9 chưa bắt đầu. Roadmap: `docs/00_roadmap_phases_v1.md`; tiến độ chi tiết: `PROGRESS.md`; backlog: `TASKS.md`.
-- Việc treo: OTP xác thực thiết bị mới (quyết sau P6).
+- P0 hạ tầng, P1 User & Auth (`docs/auth/`), P2 Product (`docs/product/`), P3 Order (`docs/order/`): xong, có integration test; P3 có thêm E2E Playwright và k6.
+- P4 Payment (`docs/payment/`), P5 Notification & check-in (`docs/notification/`): đã code + integration test, chưa chạy với Stripe test/Kafka/SMTP thật.
+- P6 Bot-detection (`docs/bot-detection/`): đã code, huấn luyện trên dữ liệu k6 tự tạo, chính sách chặn D46; chưa E2E trình duyệt.
+- P7–P9 chưa bắt đầu. Roadmap: `docs/00_roadmap_phases_v1.md`; tiến độ chi tiết: `PROGRESS.md`; backlog: `TASKS.md`.
+- Việc treo: OTP xác thực thiết bị mới (D19, P6 không cần, vẫn mở).
 
 ## Code mẫu chuẩn (golden example)
 - Endpoint CRUD có phân quyền ADMIN, `@Transactional`, mapping tay, errorCode riêng: product-service — `controller/EventController.java`, `services/EventServiceImpl.java`, `exception/ProductErrorCode.java`, `db/migration/V1__create_product_tables.sql`.
 - Luồng bảo mật dùng `TransactionTemplate`, Kafka sau commit: user-service — `controller/AuthController.java`, `services/AuthServiceImpl.java`.
 - Luồng giao dịch đồng thời (idempotency, Redis + ràng buộc DB, outbox): order-service — `service/OrderServiceImpl.java`, `service/OrderCommandService.java`, `event/OrderOutboxScheduler.java`.
-- Chưa có mẫu test chuẩn (mới có `OrderRequestHasherTest`).
+- Mẫu test: integration test trên Postgres/Redis thật (D21) — order-service `OrderConcurrencyIntegrationTest` (tranh ghế/GA, idempotency), product-service `ProductCatalogIntegrationTest` (MockMvc + security filter thật); unit test Mockito `CatalogValidationServiceTest`.

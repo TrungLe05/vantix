@@ -1,6 +1,6 @@
 # Vantix — Danh sách công việc
 
-> Cập nhật: 13/11/2026. Ưu tiên: 🔴 cao (chặn phase hiện tại) · 🟠 trung bình · ⚪ thấp. Đánh dấu `[x]` khi xong và cập nhật `PROGRESS.md`.
+> Cập nhật: 15/11/2026. Ưu tiên: 🔴 cao (chặn phase hiện tại) · 🟠 trung bình · ⚪ thấp. Đánh dấu `[x]` khi xong và cập nhật `PROGRESS.md`.
 
 ## Backlog P0–P3 (đối chiếu code 13/11/2026)
 
@@ -49,7 +49,7 @@ Nhánh `feature/payment-service` (14/11/2026). Kiểm chứng: integration test 
 - [x] Refund: Order tính % theo 3 mốc, Payment gọi Refund API; hủy event → hoàn 100% (D29).
 - [x] OR08 backend chỉ còn nhận CART (việc treo từ D26).
 - [x] Frontend: nút thanh toán sau `PENDING_PAYMENT`, hộp thoại hoàn tiền, mục Purchases.
-- [ ] 🔴 **BLOCKED** (câu hỏi ở PROGRESS.md, 15/11/2026) Chạy thật với Stripe test mode (`stripe listen`, thẻ 4242) cho cả luồng thanh toán, hết hạn và hoàn tiền; ghi kết quả.
+- [ ] 🔴 **TODO** (câu hỏi ở PROGRESS.md đã trả lời 15/11/2026: tắt stack dev, chạy trên DB `*_e2e`) Chạy thật với Stripe test mode (`stripe listen`, thẻ 4242) cho cả luồng thanh toán, hết hạn và hoàn tiền; ghi kết quả.
 - [ ] 🟠 E2E Playwright cho luồng thanh toán/hoàn (cần Stripe test mode hoặc stub webhook) và kiểm tra UI trên trình duyệt.
 - [ ] 🟠 Quyết định có cấp "cửa sổ thanh toán" riêng khi confirm sát deadline hay giữ nguyên (D27).
 - [ ] ⚪ Đơn 0 đồng (vé miễn phí); hoàn từng vé; API ADMIN xử lý refund `FAILED`; giới hạn vé theo buyer qua nhiều Order (D24).
@@ -63,7 +63,7 @@ Nhánh `feature/notification-checkin` (14/11/2026, tách từ `feature/payment-s
 - [x] Bảng `notifications`, API danh sách/đánh dấu đã đọc, WebSocket (ticket một lần).
 - [x] Order: phát hành vé/QR (`TICKETS_ISSUED`), API quét vé ADMIN/STAFF, chống quét trùng (trả ai quét, lúc nào).
 - [x] Frontend: vé + QR, chuông thông báo realtime, trang check-in.
-- [ ] 🔴 **BLOCKED** (cùng câu hỏi với task Stripe ở PROGRESS.md) Chạy end-to-end: Kafka thật (vé → thông báo → WebSocket qua Gateway), SMTP thật (hoặc mail catcher) cho OTP/STAFF/đặt vé; ghi kết quả.
+- [ ] 🔴 **TODO** (chạy sau task Stripe; Resend sandbox chỉ gửi được tới email chủ tài khoản) Chạy end-to-end: Kafka thật (vé → thông báo → WebSocket qua Gateway), SMTP thật (hoặc mail catcher) cho OTP/STAFF/đặt vé; ghi kết quả.
 - [ ] 🟠 Playwright cho vé/check-in/thông báo; thử camera `BarcodeDetector` trên điện thoại.
 - [ ] 🟠 Thêm `.open-next` vào ignore của ESLint (output build Cloudflare làm `npm run lint` báo hàng nghìn lỗi ở local).
 - [ ] ⚪ Thông báo cảnh báo bot (chờ P6), thông báo cho STAFF/ADMIN, tên sự kiện trong nội dung thông báo, chuyển nhượng vé (FR4 < 24 giờ).

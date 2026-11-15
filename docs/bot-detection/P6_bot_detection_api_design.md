@@ -38,7 +38,7 @@ Trước khi gọi Product: buyer hoặc thiết bị có flag ACTIVE → `4019`
 ~~~
 
 ### OR15 — Gỡ flag (ADMIN)
-`POST /api/orders/bot-flags/{flagId}/clear` — không body. ACTIVE → CLEARED (`clearedAt`, `clearedBy`); đã CLEARED → trả lại như cũ (idempotent). Lỗi `4020`.
+`POST /api/orders/bot-flags/{flagId}/clear` — không body. `WATCH` hoặc `ACTIVE` → `CLEARED` (`clearedAt`, `clearedBy`; UI gọi là "Dismiss" với WATCH); đã CLEARED → trả lại như cũ (idempotent). Lỗi `4020`.
 
 ## 4. Kafka
 

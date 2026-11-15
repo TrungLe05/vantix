@@ -1,18 +1,18 @@
 # Vantix — Tiến độ
 
-> Cập nhật: 15/11/2026 · nhánh `feature/bot-detection` (P6, tách từ `develop` sau khi merge P4/P5). Trạng thái lấy từ code, không chỉ từ docs.
+> Cập nhật: 15/11/2026 · `develop` có P4, P5, P6 (#53); PR #54 (`feature/refund-checkin-admin-ux`, sửa sau chạy thử) và #55 (`fix/bot-false-positives`, D46) đang chờ merge. Trạng thái lấy từ code, không chỉ từ docs.
 
 ## Tổng quan
 
 | Phase | Nội dung | Trạng thái | Ghi chú |
 |---|---|---|---|
 | P0 | Hạ tầng, khung 8 service, CI | ✅ Xong | Compose tự tạo 5 DB khi volume trống (init script); `docker-compose.prod.yml`, `Dockerfile` gốc rỗng |
-| P1 | User & Auth | ✅ Xong | 14 API, manual test; chưa có test tự động |
-| P2 | Product (catalog) | ✅ Xong phần API | 14 API (PR01–PR14); thiếu test, bootstrap DB |
+| P1 | User & Auth | ✅ Xong | 14 API (gồm tạo STAFF), API nội bộ contact/account (P5, P6); 19 integration test (OTP, refresh rotation) |
+| P2 | Product (catalog) | ✅ Xong | 14 API (PR01–PR14), venue có tọa độ (D45); 20 integration test; Compose tự tạo DB |
 | P3 | Order: giỏ, hold, chống bán trùng | ✅ Xong | 9 API + UI (có hủy giỏ CART); integration/concurrency test, E2E Playwright, k6 (đúng đắn đạt, thông lượng/event còn thấp) |
 | P4 | Payment (Stripe) | 🟡 Đã code + integration test | Stripe Checkout, webhook, hoàn tiền, UI; chưa chạy với Stripe thật, chưa có E2E |
 | P5 | Notification & check-in | 🟡 Đã code + integration test | Vé/QR, check-in chống quét trùng, thông báo + email + WebSocket, email OTP/STAFF; chưa chạy E2E với Kafka/SMTP thật |
-| P6 | Bot-detection | 🟡 Đã code + huấn luyện | Device ID, feature Redis, Isolation Forest trên dữ liệu k6 tự tạo (test offline: precision 0.985, recall 0.933, chặn nhầm 3.5% tài khoản người dùng; live: chặn nhầm 8%, botfarm 4/24), chặn 4019, trang review ADMIN; chưa E2E trình duyệt |
+| P6 | Bot-detection | 🟡 Đã code + huấn luyện | Device ID, feature Redis, Isolation Forest trên dữ liệu k6 tự tạo (test offline: precision 0.985, recall 0.933, chặn nhầm 3.5% tài khoản người dùng; live vòng C chấm lại sạch: ~1% người dùng bị flag — con số 8% ban đầu do lỗi dữ liệu k6), chính sách D46 (chặn khi HIGH kèm luật hoặc lặp lại, HIGH đơn lẻ → WATCH: test B chặn nhầm 0/200), chặn 4019, trang review ADMIN; chưa E2E trình duyệt |
 | P7 | AI Assistant | ⬜ Chưa bắt đầu | Chỉ `/health` |
 | P8 | Dữ liệu cá nhân | ⬜ Chưa bắt đầu | |
 | P9 | Hoàn thiện, deploy | ⬜ Chưa bắt đầu | |
@@ -24,7 +24,7 @@
 - OTP ở Redis (HMAC), refresh token JWT trong cookie httpOnly, claim `mcp` ép đổi mật khẩu.
 - Seed: 1 ADMIN, 1 STAFF, 5 BUYER (`buyer0..4`).
 - Gateway: `JwtAuthenticationGlobalFilter`, public-endpoints, password-change allowlist, CORS.
-- Kafka producer 3 topic `user.*` (chưa có consumer).
+- Kafka producer 3 topic `user.*` (notification-service consume từ P5).
 - Frontend: login/register/verify/forgot/reset/auth-callback, onboarding Google lần đầu, profile.
 
 ### P2 — Product
@@ -39,8 +39,8 @@
 - Hết hạn: scheduler 1 giây + expire khi đọc.
 - Kafka: outbox `cart.item_added`; consumer `product.event-cancelled` idempotent (`cancelled_events`).
 - OpenFeign gọi Product, fail closed (4010).
-- Script k6 `backend/services/order-service/k6/seat-contention.js` (chưa có kết quả chạy lưu lại).
-- Test: `OrderRequestHasherTest` (unit duy nhất của toàn repo).
+- k6 `backend/services/order-service/k6/seat-contention.js`, kết quả `k6/results/2026-11-14-contention.md`.
+- Test: unit + integration/concurrency (Postgres/Redis thật), E2E Playwright `frontend/e2e`.
 - Frontend: Continue tạo hold từ event detail/seat map, trang orders (list) và order detail (countdown, sửa GA, bỏ item, confirm), không giả lập payment.
 
 ### P4 — Payment
@@ -78,9 +78,9 @@
 
 ### Vòng làm task tự động (15/11/2026)
 
-- **BLOCKED — Chạy thật Stripe test mode** (và kéo theo **E2E Kafka/SMTP**, vì email "đặt vé" cần thanh toán Stripe). Đã xác nhận: Stripe CLI đăng nhập được, secret của `stripe listen` khớp `STRIPE_WEBHOOK_SECRET`, key là `sk_test_`. Vướng: cả stack dev của chủ repo đang chạy trên cổng 3000/8999/9000–9004 nên stack riêng (DB `*_e2e`) không khởi động được; dùng stack dev thì phải tạo tài khoản/đơn test trong DB dev đang dùng, webhook đi vào payment-service dev, Kafka dùng chung. **Câu hỏi:** chạy thử trên stack dev đang chạy (tạo một buyer test trong `users_service`, đơn test trong DB dev) được không, hay tắt stack dev để chạy stack riêng trên DB `*_e2e`?
+- **BLOCKED — Chạy thật Stripe test mode** (và kéo theo **E2E Kafka/SMTP**, vì email "đặt vé" cần thanh toán Stripe). Đã xác nhận: Stripe CLI đăng nhập được, secret của `stripe listen` khớp `STRIPE_WEBHOOK_SECRET`, key là `sk_test_`. Vướng: cả stack dev của chủ repo đang chạy trên cổng 3000/8999/9000–9004 nên stack riêng (DB `*_e2e`) không khởi động được; dùng stack dev thì phải tạo tài khoản/đơn test trong DB dev đang dùng, webhook đi vào payment-service dev, Kafka dùng chung. **Câu hỏi:** chạy thử trên stack dev đang chạy (tạo một buyer test trong `users_service`, đơn test trong DB dev) được không, hay tắt stack dev để chạy stack riêng trên DB `*_e2e`? **Đã trả lời (15/11/2026):** chủ repo tắt stack dev, chạy stack riêng trên DB `*_e2e` — task chờ chạy, chưa có kết quả.
 - **DONE — Giảm chặn nhầm bot-detection** (D46): đọc lại `bot_score.evaluated` vòng C từ Kafka và tái hiện offline → 11/12 feature khớp, riêng `device_accounts_24h` lệch do UUID thiết bị "gia đình"/"farm" của k6 trùng giữa lần chạy thử và lần chạy live (Redis giữ 24 giờ) → chặn nhầm thật ~1% chứ không phải 8%; "botfarm 4/24" là 20 tài khoản bị chặn theo thiết bị trước khi có bản tin. Sửa `datagen/traffic.js` (mã riêng mỗi lần chạy). Chính sách mới: HIGH kèm luật tay (`ruleMatched`) → chặn; HIGH đơn lẻ → `WATCH`, HIGH lần hai → chặn (order migration V6, bot-detection thêm `ruleMatched`, trang Bot review có bộ lọc Watching). Test B: người dùng bị chặn 7/200 → 0/200, bot 49/56 → 47/56. Script `training/evaluate_policy.py`. Test: order 97, pytest 18.
-- **Bước tiếp theo:** trả lời câu hỏi Stripe ở trên để mở hai task BLOCKED; còn lại theo thứ tự ưu tiên 🟠 trong `TASKS.md` (Playwright/kiểm tra trình duyệt, ESLint bỏ qua `.open-next`, …).
+- **Bước tiếp theo:** khi stack dev đã tắt, chạy Stripe test mode trên stack `*_e2e` (thanh toán, hết hạn, hoàn tiền) để mở hai task BLOCKED; còn lại theo thứ tự ưu tiên 🟠 trong `TASKS.md` (Playwright/kiểm tra trình duyệt, ESLint bỏ qua `.open-next`, …).
 
 ## Đồng bộ tài liệu (13/11/2026)
 
@@ -96,7 +96,7 @@
 
 ## Rủi ro / nợ kỹ thuật
 
-- ~140 test tự động backend (unit + integration trên Postgres/Redis thật, CI dùng service container); E2E Playwright cho P1–P3, chưa có cho thanh toán.
+- 181 test tự động backend + 18 pytest bot-detection (unit + integration trên Postgres/Redis thật, CI dùng service container); E2E Playwright cho P1–P3, chưa có cho thanh toán/vé/bot review.
 - P4 chưa chạy với Stripe thật: lớp gọi SDK (`StripeSdkGateway`) mới được biên dịch, logic được test với Stripe giả lập.
 - Refund `FAILED` phải xử lý tay (log `REFUND_FAILED`); chưa có API quản trị.
 - P5 chưa chạy end-to-end (Kafka + SMTP thật, WebSocket qua Gateway, camera trên thiết bị thật). Dev không có SMTP thì email OTP bị bỏ qua (`EMAIL_SKIPPED`), cần cấu hình `MAIL_HOST` để đăng ký tài khoản mới.

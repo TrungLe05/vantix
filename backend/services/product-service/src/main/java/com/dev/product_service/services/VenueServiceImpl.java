@@ -23,6 +23,8 @@ public class VenueServiceImpl implements VenueService {
                 .name(request.getName().trim())
                 .address(request.getAddress().trim())
                 .city(request.getCity().trim())
+                .latitude(request.getLatitude().setScale(6, java.math.RoundingMode.HALF_UP))
+                .longitude(request.getLongitude().setScale(6, java.math.RoundingMode.HALF_UP))
                 .build();
         return buildResponse(venueRepository.save(venue));
     }
@@ -39,6 +41,8 @@ public class VenueServiceImpl implements VenueService {
                 .city(venue.getCity())
                 .name(venue.getName())
                 .address(venue.getAddress())
+                .latitude(venue.getLatitude())
+                .longitude(venue.getLongitude())
                 .build();
     }
 }

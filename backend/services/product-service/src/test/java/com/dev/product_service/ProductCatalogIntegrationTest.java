@@ -80,7 +80,7 @@ class ProductCatalogIntegrationTest {
         }
         mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(springSecurityFilterChain).build();
         venueId = id(admin(post("/venues"),
-                "{\"name\":\"IT Venue\",\"address\":\"1 Test St\",\"city\":\"HCM\"}").andExpect(status().isCreated()));
+                "{\"name\":\"IT Venue\",\"address\":\"1 Test St\",\"city\":\"HCM\",\"latitude\":10.776889,\"longitude\":106.700806}").andExpect(status().isCreated()));
     }
 
     // ---------- PR05: publish gom lý do ----------
@@ -284,6 +284,40 @@ class ProductCatalogIntegrationTest {
     }
 
     // ---------- helpers ----------
+
+    // ---------- P6 follow-up: venue phải có tọa độ (D45), sửa số lượng GA khi còn DRAFT ----------
+
+    @Test
+    void venueRequiresValidCoordinates() throws Exception {
+        admin(post("/venues"), "{\"name\":\"No coords\",\"address\":\"1 St\",\"city\":\"HCM\"}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1001));
+        admin(post("/venues"), "{\"name\":\"Bad\",\"address\":\"1 St\",\"city\":\"HCM\","
+                + "\"latitude\":91,\"longitude\":106.7}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1001));
+        admin(post("/venues"), "{\"name\":\"Ok\",\"address\":\"1 St\",\"city\":\"HCM\","
+                + "\"latitude\":10.7768891,\"longitude\":106.700806}")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.result.latitude").value(10.776889));
+    }
+
+    @Test
+    void gaQuantityIsEditableOnlyWhileDraft() throws Exception {
+        UUID eventId = createEvent();
+        UUID ga = id(createGa(eventId, 5).andExpect(status().isCreated()));
+        admin(patch("/ticket-types/" + ga), "{\"totalQuantity\":12}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.totalQuantity").value(12));
+        admin(patch("/ticket-types/" + ga), "{\"totalQuantity\":0}")
+                .andExpect(status().isBadRequest());
+        admin(patch("/events/" + eventId + "/publish"), null).andExpect(status().isOk());
+        admin(patch("/ticket-types/" + ga), "{\"totalQuantity\":20}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(3304));
+        // Đổi tên/giá vẫn được sau publish (hợp đồng PR13 cũ)
+        admin(patch("/ticket-types/" + ga), "{\"name\":\"Standing\"}").andExpect(status().isOk());
+    }
 
     private UUID createEvent() throws Exception {
         Instant start = Instant.now().plus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);

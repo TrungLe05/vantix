@@ -2,6 +2,7 @@ package com.dev.product_service.dto.request;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -20,4 +21,8 @@ public class UpdateTicketTypeRequest {
     @DecimalMin(value = "0.0", inclusive = true)
     @Digits(integer = 8, fraction = 2)
     private BigDecimal price;
+
+    // Chỉ hạng GA và chỉ khi event còn DRAFT (chưa có tồn kho ở Order); xem 3304
+    @Min(1)
+    private Integer totalQuantity;
 }

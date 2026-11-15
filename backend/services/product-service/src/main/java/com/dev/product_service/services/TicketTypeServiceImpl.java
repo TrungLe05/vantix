@@ -150,6 +150,13 @@ public class TicketTypeServiceImpl implements TicketTypeService {
         if (request.getPrice() != null) {
             ticketType.setPrice(request.getPrice());
         }
+        if (request.getTotalQuantity() != null) {
+            // Sau publish, Order đã có thể dựng tồn kho từ số lượng này: đổi lúc đó lệch kho (chống bán trùng)
+            if (event.getStatus() != EventStatus.DRAFT || ticketType.getCategory() != TicketCategory.GENERAL_ADMISSION) {
+                throw new AppException(ProductErrorCode.TICKET_QUANTITY_NOT_EDITABLE);
+            }
+            ticketType.setTotalQuantity(request.getTotalQuantity());
+        }
 
         return buildResponse(ticketType);
     }

@@ -22,7 +22,11 @@ public enum OrderErrorCode implements ErrorCode {
     TICKET_LIMIT_EXCEEDED(4012, "Vượt quá số vé tối đa cho một đơn hàng", HttpStatus.BAD_REQUEST),
     PAYMENT_SERVICE_UNAVAILABLE(4013, "Không thể khởi tạo thanh toán, vui lòng thử lại", HttpStatus.SERVICE_UNAVAILABLE),
     ORDER_NOT_PAYABLE(4014, "Đơn hàng không đủ điều kiện thanh toán trực tuyến", HttpStatus.CONFLICT),
-    REFUND_NOT_ALLOWED(4015, "Đơn hàng không đủ điều kiện hoàn tiền", HttpStatus.CONFLICT);
+    REFUND_NOT_ALLOWED(4015, "Đơn hàng không đủ điều kiện hoàn tiền", HttpStatus.CONFLICT),
+    // 401x tiếp: vé và check-in (P5)
+    TICKET_NOT_FOUND(4016, "Không tìm thấy vé cho sự kiện này", HttpStatus.NOT_FOUND),
+    TICKET_ALREADY_CHECKED_IN(4017, "Vé đã được check-in trước đó", HttpStatus.CONFLICT),
+    TICKET_NOT_VALID(4018, "Vé đã bị hủy và không còn hiệu lực", HttpStatus.CONFLICT);
 
     private final int code;
     private final String message;

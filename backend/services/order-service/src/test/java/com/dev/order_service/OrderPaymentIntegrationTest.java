@@ -57,7 +57,7 @@ class OrderPaymentIntegrationTest extends AbstractOrderIT {
         orderCommandService.handlePaymentSucceeded(succeeded(order, buyer));
 
         OrderResponse paid = orderService.getOrder(buyer, order.getId());
-        assertThat(paid.getStatus()).isEqualTo(OrderStatus.PAID);
+        assertThat(paid.getStatus()).isEqualTo(OrderStatus.TICKETS_ISSUED);
         assertThat(paid.getPaidAt()).isNotNull();
         assertThat(paid.getRefund()).isNull();
         assertThat(jdbc.queryForList("SELECT DISTINCT status FROM holds WHERE order_id = ?", String.class,
@@ -78,7 +78,7 @@ class OrderPaymentIntegrationTest extends AbstractOrderIT {
         orderCommandService.handlePaymentSucceeded(event);
         orderCommandService.handlePaymentSucceeded(event);
 
-        assertThat(orderStatus(order.getId())).isEqualTo("PAID");
+        assertThat(orderStatus(order.getId())).isEqualTo("TICKETS_ISSUED");
         assertThat(soldGa()).isEqualTo(2);
         assertThat(heldGa()).isZero();
     }
@@ -93,7 +93,7 @@ class OrderPaymentIntegrationTest extends AbstractOrderIT {
 
         orderCommandService.expireDueOrders();
 
-        assertThat(orderStatus(order.getId())).isEqualTo("PAID");
+        assertThat(orderStatus(order.getId())).isEqualTo("TICKETS_ISSUED");
         assertError(() -> createCart(UUID.randomUUID(), key(), seat(0)), 4006);
         assertThat(activeSeatHolds(seatIds.get(0))).isEqualTo(1);
     }
@@ -139,7 +139,7 @@ class OrderPaymentIntegrationTest extends AbstractOrderIT {
                 paid.getId(), buyer, PaymentFailedEvent.REASON_FAILED, Instant.now()));
 
         assertThat(orderStatus(expiredByPayment.getId())).isEqualTo("EXPIRED");
-        assertThat(orderStatus(paid.getId())).isEqualTo("PAID");
+        assertThat(orderStatus(paid.getId())).isEqualTo("TICKETS_ISSUED");
         assertThat(heldGa()).isZero();
         assertThat(soldGa()).isEqualTo(1);
     }
@@ -237,7 +237,7 @@ class OrderPaymentIntegrationTest extends AbstractOrderIT {
         assertThat(quote.getAmount()).isEqualByComparingTo("0.00");
         assertError(() -> orderService.requestRefund(buyer, order.getId()), 4015);
 
-        assertThat(orderStatus(order.getId())).isEqualTo("PAID");
+        assertThat(orderStatus(order.getId())).isEqualTo("TICKETS_ISSUED");
         assertThat(soldGa()).isEqualTo(2);
         assertThat(refundOutboxCount(order.getId())).isZero();
     }

@@ -81,7 +81,7 @@ erDiagram
 
 ~~~mermaid
 stateDiagram-v2
-    PENDING_PAYMENT --> PAID: payment.succeeded
+    PENDING_PAYMENT --> PAID: payment.succeeded (từ P5 đi tiếp ngay TICKETS_ISSUED, D31)
     PENDING_PAYMENT --> EXPIRED: deadline hold / payment.failed(EXPIRED)
     PENDING_PAYMENT --> CANCELLED: hủy event / payment.failed(FAILED)
     PAID --> REFUND_PENDING: buyer hủy (100%/50%) hoặc hủy event (100%)

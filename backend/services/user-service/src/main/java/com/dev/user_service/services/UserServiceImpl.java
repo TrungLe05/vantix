@@ -4,6 +4,7 @@ import com.dev.commonlib_api_response.exception.AppException;
 import com.dev.commonlib_kafka.event.StaffAccountCreatedEvent;
 import com.dev.commonlib_kafka.topic.KafkaTopics;
 import com.dev.user_service.dto.request.CreateStaffRequest;
+import com.dev.user_service.dto.response.UserContactResponse;
 import com.dev.user_service.dto.response.UserResponse;
 import com.dev.user_service.entities.User;
 import com.dev.user_service.enums.UserRole;
@@ -37,6 +38,19 @@ public class UserServiceImpl implements UserService{
         return userRepository.findById(userId)
                 .filter(u -> u.getDeletedAt() == null)
                 .map(this::buildResponse)
+                .orElseThrow(() -> new AppException(UserErrorCode.USER_NOT_FOUND));
+    }
+
+    @Override
+    public UserContactResponse getContact(UUID userId) {
+        // User đã xóa mềm không nhận thông báo nữa: trả 404 để notification bỏ qua email
+        return userRepository.findById(userId)
+                .filter(u -> u.getDeletedAt() == null)
+                .map(u -> UserContactResponse.builder()
+                        .userId(u.getId())
+                        .email(u.getEmail())
+                        .fullName(u.getFullName())
+                        .build())
                 .orElseThrow(() -> new AppException(UserErrorCode.USER_NOT_FOUND));
     }
 

@@ -5,7 +5,9 @@ import com.dev.commonlib_kafka.event.PaymentFailedEvent;
 import com.dev.commonlib_kafka.event.PaymentSucceededEvent;
 import com.dev.commonlib_kafka.event.RefundCompletedEvent;
 import com.dev.commonlib_kafka.event.RefundFailedEvent;
+import com.dev.commonlib_kafka.event.OrderRefundedEvent;
 import com.dev.commonlib_kafka.event.RefundRequestedEvent;
+import com.dev.commonlib_kafka.event.TicketsIssuedEvent;
 import com.dev.order_service.entity.OrderRefund;
 import com.dev.order_service.enums.RefundReason;
 import com.dev.order_service.enums.RefundStatus;
@@ -65,6 +67,7 @@ public class OrderCommandService {
             List.of(OrderStatus.PAID, OrderStatus.TICKETS_ISSUED);
 
     private final OrderRefundRepository orderRefundRepository;
+    private final TicketService ticketService;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final HoldRepository holdRepository;
@@ -353,10 +356,19 @@ public class OrderCommandService {
             // Order đóng băng ở PENDING_PAYMENT nên không thể lệch; nếu lệch là lỗi tích hợp cần xem tay
             log.error("PAYMENT_AMOUNT_MISMATCH orderId={} paymentId={}", order.getId(), event.paymentId());
         }
-        order.setStatus(OrderStatus.PAID);
-        order.setPaidAt(event.paidAt() != null ? event.paidAt() : now);
+        Instant paidAt = event.paidAt() != null ? event.paidAt() : now;
+        order.setPaidAt(paidAt);
+        // P5: phát hành vé ngay trong transaction ghi nhận thanh toán → Order đi thẳng PAID → TICKETS_ISSUED.
+        // Cùng transaction nên không có Order "đã trả tiền mà không có vé" (D31).
+        int ticketCount = ticketService.issueTickets(order, holds);
+        order.setStatus(OrderStatus.TICKETS_ISSUED);
         orderRepository.save(order);
-        log.info("Order đã thanh toán, orderId={} paymentId={}", order.getId(), event.paymentId());
+        orderEventPublisher.recordTicketsIssued(new TicketsIssuedEvent(
+                order.getId(), order.getBuyerId(), order.getEventId(), ticketCount,
+                order.getTotalAmount(), order.getCurrency(), now
+        ));
+        log.info("Order đã thanh toán, phát hành {} vé, orderId={} paymentId={}",
+                ticketCount, order.getId(), event.paymentId());
     }
 
     /** payment.failed: nhả hold nếu Order còn chờ thanh toán; các trạng thái khác đã được xử lý. */
@@ -389,6 +401,10 @@ public class OrderCommandService {
         if (!PAID_ORDER_STATUSES.contains(order.getStatus()) || percent <= 0) {
             throw new AppException(OrderErrorCode.REFUND_NOT_ALLOWED);
         }
+        // Đã có người vào cổng bằng vé của đơn: không hoàn (hoàn cả đơn, D29)
+        if (ticketService.hasCheckedInTickets(order.getId())) {
+            throw new AppException(OrderErrorCode.REFUND_NOT_ALLOWED);
+        }
         refundPaidOrder(order, RefundReason.BUYER_REQUEST, percent);
         orderRepository.flush();
         return orderMapper.toResponse(order);
@@ -405,6 +421,12 @@ public class OrderCommandService {
                     refund.setStatus(RefundStatus.COMPLETED);
                     refund.setFailureReason(null);
                     refund.setCompletedAt(event.completedAt() != null ? event.completedAt() : Instant.now());
+                    // P5: Notification không đọc refund.completed (không có buyer/lý do) mà nghe Order
+                    orderEventPublisher.recordOrderRefunded(new OrderRefundedEvent(
+                            refund.getId(), order.getId(), order.getBuyerId(), order.getEventId(),
+                            refund.getAmount(), refund.getCurrency(), refund.getReason().name(),
+                            refund.getCompletedAt()
+                    ));
                     // Thanh toán trễ: Order giữ EXPIRED/CANCELLED, chỉ refund đổi trạng thái
                     if (order.getStatus() == OrderStatus.REFUND_PENDING) {
                         order.setStatus(OrderStatus.REFUNDED);
@@ -445,6 +467,7 @@ public class OrderCommandService {
                     .ifPresent(item -> item.setItemStatus(OrderItemStatus.CANCELLED));
             deleteRedisAfterCommit(redisKey(hold));
         }
+        ticketService.voidValidTickets(order.getId());
         order.setStatus(OrderStatus.REFUND_PENDING);
         orderRepository.save(order);
         createRefund(order, reason, percent, RefundPolicy.amount(order.getTotalAmount(), percent));

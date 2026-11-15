@@ -22,7 +22,7 @@ Chính sách hoàn vé: ≥ 7 ngày trước giờ diễn hoàn 100%, 24h–7 ng
 
 ## Trạng thái
 
-P0 hạ tầng ✅ · P1 User & Auth ✅ · P2 Product ✅ · P3 Order ✅ · **P4 Payment 🟡 đã code + integration test, chờ chạy với Stripe test thật** · P5–P9 chưa bắt đầu. Xem [PROGRESS.md](PROGRESS.md) và [TASKS.md](TASKS.md).
+P0 hạ tầng ✅ · P1 User & Auth ✅ · P2 Product ✅ · P3 Order ✅ · **P4 Payment 🟡** và **P5 Notification & check-in 🟡** đã code + integration test, chờ chạy end-to-end (Stripe test, Kafka, SMTP) · P6–P9 chưa bắt đầu. Xem [PROGRESS.md](PROGRESS.md) và [TASKS.md](TASKS.md).
 
 ## Stack
 
@@ -76,6 +76,10 @@ Mọi request từ trình duyệt đi qua Gateway `http://localhost:8999/api/...
 
 Thiếu khóa thì payment-service vẫn khởi động nhưng tạo phiên thanh toán trả `5101`/`4013` và mọi webhook bị từ chối (`5201`).
 
+### Email (notification-service)
+
+Đặt `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` (SMTP thật hoặc mail catcher bất kỳ). Thiếu `MAIL_HOST` thì service vẫn chạy, thông báo trong ứng dụng vẫn có, nhưng **email OTP đăng ký/quên mật khẩu không được gửi** (log `EMAIL_SKIPPED`, không in mã). Trình duyệt soát vé (`/check-in`) quét bằng camera trên Chrome/Edge/Android; trình duyệt khác nhập mã.
+
 ## Tài liệu
 
 | File | Nội dung |
@@ -85,7 +89,7 @@ Thiếu khóa thì payment-service vẫn khởi động nhưng tạo phiên than
 | [PROGRESS.md](PROGRESS.md) | Tiến độ theo phase, những gì đã có trong code |
 | [TASKS.md](TASKS.md) | Backlog việc cần làm |
 | `docs/00_roadmap_phases_v1.md` | Roadmap P0–P9, yêu cầu chức năng |
-| `docs/auth/`, `docs/product/`, `docs/order/`, `docs/payment/` | Design, API design, UI plan theo phase |
+| `docs/auth/`, `docs/product/`, `docs/order/`, `docs/payment/`, `docs/notification/` | Design, API design, UI plan theo phase |
 | `CLAUDE.md`, `AGENTS.md`, `frontend/AGENTS.md` | Quy ước cho AI agent và convention code |
 
 ## Giới hạn đã biết

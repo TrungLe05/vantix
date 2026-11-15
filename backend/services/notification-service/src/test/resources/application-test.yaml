@@ -1,0 +1,20 @@
+# Profile integration test (D21): PostgreSQL thật, DB riêng notifications_service_test
+# (docker/postgres/test/create-test-databases.sql). SMTP, user-service và Kafka thay bằng mock.
+spring:
+  datasource:
+    url: jdbc:postgresql://${IT_DB_HOST:localhost}:${IT_DB_PORT:5432}/notifications_service_test
+    username: ${IT_DB_USER:vantix_test}
+    password: ${IT_DB_PASSWORD:vantix_test}
+  mail:
+    host: ""
+  # Không trỏ vào Kafka dev; consumer gọi trực tiếp trong test nên tắt listener container
+  kafka:
+    bootstrap-servers: localhost:1
+    listener:
+      auto-startup: false
+app:
+  notification:
+    frontend-base-url: http://localhost:3000
+    # Test gọi thẳng scheduler; không để lần chạy nền đua với test
+    email-initial-delay-ms: 3600000
+    email-poll-interval-ms: 3600000

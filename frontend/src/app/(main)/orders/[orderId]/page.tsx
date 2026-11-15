@@ -37,17 +37,120 @@ import {
   getAvailability,
   getOrder,
   getRefundQuote,
+  getTicketQr,
   removeOrderItem,
   requestRefund,
   startCheckout,
   updateOrderItemQuantity,
 } from "@/lib/api/orders";
 import { getErrorMessage } from "@/lib/api/client";
+import type { OrderTicket } from "@/types/orders";
 
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 });
+
+const ticketTime = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+// Ảnh QR cần JWT nên không dùng <img src> trực tiếp: tải blob qua apiClient rồi tạo object URL.
+// gcTime 0 để mỗi lần mount tải lại — object URL bị thu hồi khi unmount không được dùng lại từ cache.
+function TicketQr({ orderId, ticket }: { orderId: string; ticket: OrderTicket }) {
+  const qrQuery = useQuery({
+    queryKey: ["ticket-qr", orderId, ticket.id],
+    queryFn: async () => URL.createObjectURL(await getTicketQr(orderId, ticket.id)),
+    staleTime: Infinity,
+    gcTime: 0,
+  });
+  const url = qrQuery.data;
+  useEffect(() => {
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [url]);
+
+  if (qrQuery.isError) {
+    return (
+      <p role="alert" className="text-xs text-muted-foreground">
+        QR code unavailable. Show the ticket code below instead.
+      </p>
+    );
+  }
+  if (!url) {
+    return (
+      <div
+        role="status"
+        aria-label="Loading QR code"
+        className="size-40 animate-pulse rounded-lg bg-muted"
+      />
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- object URL cục bộ, next/image không tối ưu được
+    <img
+      src={url}
+      alt={`QR code for ${ticket.ticketName}${ticket.seatLabel ? `, ${ticket.seatLabel}` : ""}`}
+      width={160}
+      height={160}
+      className="size-40 rounded-lg border border-border bg-white p-1"
+    />
+  );
+}
+
+function TicketsPanel({
+  orderId,
+  tickets,
+}: {
+  orderId: string;
+  tickets: OrderTicket[];
+}) {
+  return (
+    <section
+      aria-labelledby="tickets-title"
+      className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-7"
+    >
+      <h2 id="tickets-title" className="font-heading text-xl font-bold">
+        Your tickets
+      </h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Show one QR code per person at the entrance. Each code can be scanned
+        once.
+      </p>
+      <ul className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {tickets.map((ticket) => (
+          <li
+            key={ticket.id}
+            className={`flex flex-col items-center gap-3 rounded-xl border p-4 text-center ${ticket.status === "VALID" ? "border-border" : "border-dashed border-border bg-muted/40"}`}
+          >
+            <div>
+              <p className="font-semibold">{ticket.ticketName}</p>
+              <p className="text-sm text-muted-foreground">
+                {ticket.seatLabel ?? "General admission"}
+              </p>
+            </div>
+            {ticket.status === "VALID" ? (
+              <TicketQr orderId={orderId} ticket={ticket} />
+            ) : (
+              <p className="rounded-full bg-muted px-3 py-1 text-xs font-semibold">
+                {ticket.status === "CHECKED_IN"
+                  ? `Checked in${ticket.checkedInAt ? ` · ${ticketTime.format(new Date(ticket.checkedInAt))}` : ""}`
+                  : "Cancelled"}
+              </p>
+            )}
+            {ticket.status === "VALID" ? (
+              <p className="break-all font-mono text-xs text-muted-foreground">
+                {ticket.code}
+              </p>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 function CartSkeleton() {
   return (
@@ -442,7 +545,7 @@ export default function OrderCartPage() {
                         .{" "}
                       </>
                     ) : null}
-                    Your tickets are reserved for you.
+                    Your tickets are ready below.
                   </p>
                 </div>
               </section>
@@ -475,6 +578,10 @@ export default function OrderCartPage() {
                   </p>
                 </div>
               </section>
+            ) : null}
+
+            {order.tickets.length ? (
+              <TicketsPanel orderId={order.id} tickets={order.tickets} />
             ) : null}
 
             <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">

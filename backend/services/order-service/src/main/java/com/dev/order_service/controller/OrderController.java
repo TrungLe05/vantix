@@ -3,19 +3,24 @@ package com.dev.order_service.controller;
 import com.dev.commonlib_api_response.dto.response.ApiResponse;
 import com.dev.commonlib_security.security.SecurityUtils;
 import com.dev.order_service.dto.request.AddOrderItemsRequest;
+import com.dev.order_service.dto.request.CheckInRequest;
 import com.dev.order_service.dto.request.CreateOrderRequest;
 import com.dev.order_service.dto.request.UpdateOrderItemQuantityRequest;
 import com.dev.order_service.dto.response.AvailabilityResponse;
+import com.dev.order_service.dto.response.CheckInResponse;
 import com.dev.order_service.dto.response.CheckoutResponse;
 import com.dev.order_service.dto.response.RefundQuoteResponse;
 import com.dev.order_service.dto.response.OrderResponse;
 import com.dev.order_service.dto.response.PageResponse;
 import com.dev.order_service.service.OrderService;
+import com.dev.order_service.service.TicketService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -31,6 +36,7 @@ import java.util.UUID;
 public class OrderController {
 
     private final OrderService orderService;
+    private final TicketService ticketService;
 
     @PostMapping
     @PreAuthorize("hasRole('BUYER')")
@@ -143,6 +149,28 @@ public class OrderController {
     public ApiResponse<OrderResponse> refund(@PathVariable UUID orderId) {
         return ApiResponse.<OrderResponse>builder()
                 .result(orderService.requestRefund(SecurityUtils.getCurrentUserId(), orderId))
+                .build();
+    }
+
+    // OR12 — ảnh QR của vé. Không khai báo produces để lỗi vẫn trả JSON qua GlobalExceptionHandler
+    @GetMapping("/{orderId}/tickets/{ticketId}/qr")
+    @PreAuthorize("hasRole('BUYER')")
+    public ResponseEntity<byte[]> ticketQr(@PathVariable UUID orderId, @PathVariable UUID ticketId) {
+        byte[] png = ticketService.qrPng(SecurityUtils.getCurrentUserId(), orderId, ticketId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                // Ảnh chứa mã vào cổng: không cho proxy/trình duyệt dùng chung lưu lại
+                .cacheControl(CacheControl.noStore())
+                .body(png);
+    }
+
+    // OR13 — quét vé ở cổng
+    @PostMapping("/tickets/check-in")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF')")
+    public ApiResponse<CheckInResponse> checkIn(@Valid @RequestBody CheckInRequest request) {
+        return ApiResponse.<CheckInResponse>builder()
+                .result(ticketService.checkIn(
+                        SecurityUtils.getCurrentUserId(), request.getEventId(), request.getCode()))
                 .build();
     }
 

@@ -34,6 +34,12 @@
 | D28 | Thanh toán đến sau khi Order EXPIRED/CANCELLED → hoàn 100% tự động | Chốt (P4) |
 | D29 | Hoàn tiền bất đồng bộ qua Kafka, hoàn cả đơn, vé về kho ngay khi ghi nhận | Chốt (P4) |
 | D30 | API nội bộ Order → Payment dưới `/api/internal/**`, không route qua Gateway | Chốt (P4); cách ly mạng ở P9 |
+| D31 | Vé phát hành cùng transaction ghi nhận thanh toán (→ TICKETS_ISSUED), 1 vé/người, mã ngẫu nhiên 192 bit | Chốt (P5) |
+| D32 | Check-in bằng update có điều kiện theo event; quét trùng trả 4017 kèm ai quét/lúc nào | Chốt (P5) |
+| D33 | Notification nghe event nghiệp vụ của Order (thêm `order.tickets-issued`, `order.refunded`), email gửi qua trạng thái trên bảng `notifications` | Chốt (P5) |
+| D34 | Email người nhận lấy từ user-service qua API nội bộ role INTERNAL | Chốt (P5) |
+| D35 | WebSocket thuần, xác thực bằng ticket một lần 30 giây, giới hạn Origin | Chốt (P5); nhiều instance cần Redis (P9) |
+| D36 | QR sinh ở backend (zxing core), quét bằng BarcodeDetector hoặc nhập tay — không thêm dependency frontend | Chốt (chủ repo chọn 14/11/2026) |
 
 ---
 
@@ -138,3 +144,22 @@ Roadmap để ngỏ sync/async cho Order → Payment khi hoàn. Chọn async: Or
 
 ### D30 — API nội bộ giữa service
 PM01 (`/api/internal/payments/checkout-sessions`) chỉ dành cho order-service. Cân nhắc: (a) secret dùng chung giữa service — thêm một secret phải quản lý, mà mô hình hiện tại vốn đã tin mạng nội bộ (D03); (b) đặt dưới prefix không có route ở Gateway + chuyển tiếp `X-User-Id`/`X-User-Role` để Payment vẫn kiểm tra `buyerId` khớp danh tính — chọn (b). Giới hạn giống mọi service khác: ở dev cổng 9002 truy cập trực tiếp được; network isolation ở P9 mới thật sự đóng lại. Quy ước từ nay: API chỉ cho service gọi đặt dưới `/internal/**`, không thêm vào `routes`/`public-endpoints` của Gateway.
+
+
+### D31 — Phát hành vé cùng lúc ghi nhận thanh toán
+Roadmap tách `PAID` và `TICKETS_ISSUED` nhưng không nói khi nào chuyển. Cân nhắc: (a) phát hành bằng consumer/job riêng sau `PAID` — có khoảng "đã trả tiền mà chưa có vé" và thêm một đường phải retry; (b) phát hành trong chính transaction xử lý `payment.succeeded` — chọn (b): Order đi thẳng `PENDING_PAYMENT → TICKETS_ISSUED`, `PAID` chỉ còn là trạng thái trung gian trong transaction (giữ trong enum/CHECK cho dữ liệu cũ của P4). Ghế = 1 vé, GA số lượng N = N vé để mỗi người vào cổng một mã. Mã là 24 byte `SecureRandom` (base64url, 32 ký tự — đủ ngắn để nhập tay), UNIQUE ở DB; không suy ra từ id (HMAC) để không phải giữ thêm secret, đổi lại phải lưu mã. Hệ quả cho hoàn tiền (D29 hoàn cả đơn): đơn có vé đã check-in thì buyer không hoàn được (4015); ADMIN hủy event vẫn hoàn 100% (D16), vé chưa dùng thành `VOID`, vé đã check-in giữ làm lịch sử.
+
+### D32 — Check-in nguyên tử, phạm vi theo event
+Đọc trạng thái rồi mới ghi cho phép hai cổng cùng cho một vé qua. Chốt: `UPDATE tickets SET CHECKED_IN … WHERE code = ? AND event_id = ? AND status = 'VALID'` — đúng một request thắng (test 10 lần quét song song → 1 thành công). Nhánh thua đọc lại để báo lý do: đã check-in → 4017 với `result` là lần quét đầu (ai — userId, lúc nào) để STAFF xử lý tại chỗ (roadmap P5 mục 3); `VOID` → 4018. Request bắt buộc `eventId`: vé của sự kiện khác báo 4016 như mã không tồn tại, để STAFF sự kiện A không dò được vé sự kiện B và vé không bị "đốt" nhầm ở cổng khác. Giới hạn: "ai quét" chỉ là userId (Order không có tên STAFF).
+
+### D33 — Notification nghe Order, email qua trạng thái trên bảng
+Notification **không** nghe `payment.succeeded`: tiền vào chưa chắc là đặt vé thành công (D28), và `refund.completed` của Payment không có buyerId (Payment chỉ biết tiền, D07). Order phát thêm `order.tickets-issued` (không chứa mã vé) và `order.refunded` (khi nhận `refund.completed`); Notification dùng lại `order.refund-requested` (consumer group thứ hai). Đổi schema event đang dùng bị tránh — chỉ thêm topic. Mỗi bản tin nguồn → tối đa một thông báo nhờ `dedup_key` UNIQUE + `ON CONFLICT DO NOTHING`. Email không gửi trong consumer mà đánh dấu `PENDING` trên chính dòng thông báo; `EmailDispatchScheduler` giành dòng (update có điều kiện), gửi ngoài transaction, backoff `30s × 2^n`, tối đa 5 lần rồi log `NOTIFICATION_EMAIL_GAVE_UP` — cùng tinh thần outbox D25, consumer Kafka không bị SMTP chậm chặn, thông báo trong ứng dụng không phụ thuộc email. SMTP chưa cấu hình → `SKIPPED`. Email tài khoản P1 (OTP, mật khẩu tạm) chứa bí mật nên không lưu DB, gửi thẳng trong consumer, lỗi thì để Kafka retry; group riêng với `auto.offset.reset=latest` để lần đầu chạy không gửi lại mọi OTP tồn đọng từ P1, và bỏ OTP cũ hơn 10 phút (đã hết hạn).
+
+### D34 — Lấy email từ user-service
+Cân nhắc: (a) Notification giữ bản sao user (email/tên) từ event — phải thêm event cho mọi đường tạo/sửa user (register, Google, seed, STAFF) và nhân bản PII; (b) Order đưa email vào event — Order không có email; (c) gọi user-service lúc gửi — chọn (c), theo quy ước `/internal/**` của D30: `GET /api/internal/users/{id}/contact`, `@PreAuthorize("hasRole('INTERNAL')")`. Role `INTERNAL` không thể đến từ client vì Gateway luôn xóa `X-User-*` và JWT chỉ mang BUYER/ADMIN/STAFF; truy cập thẳng cổng 9004 ở dev vẫn là giới hạn chung của P9. Kèm theo: user-service trước đây **chưa bật `@EnableMethodSecurity`** nên `@PreAuthorize` trên `POST /users/staff` không có tác dụng (vẫn an toàn nhờ rule URL `hasRole("ADMIN")`); P5 bật lên.
+
+### D35 — Xác thực WebSocket bằng ticket một lần
+Trình duyệt không gửi được header `Authorization` khi mở WebSocket. Cân nhắc: (a) JWT trên query string — token sống 15 phút dễ lọt vào log Gateway/proxy; (b) service tự verify JWT trong STOMP CONNECT — phá D03 (chỉ Gateway verify JWT) và cần thư viện STOMP ở frontend; (c) ticket ngẫu nhiên 256 bit, sống 30 giây, dùng một lần, cấp qua `POST /api/notifications/ws-ticket` (đi qua Gateway, JWT hợp lệ) — chọn (c). Handshake `GET /api/notifications/ws` công khai ở Gateway, interceptor lấy-và-xóa ticket; `setAllowedOrigins(FRONTEND_ORIGIN)` chặn cross-site WebSocket hijacking. Dùng WebSocket thuần thay STOMP vì kênh chỉ một chiều server → client. Giới hạn: ticket và phiên nằm trong bộ nhớ — đúng cho một instance; nhiều instance cần Redis cho ticket + pub/sub (P9).
+
+### D36 — QR sinh ở backend
+Frontend chưa có thư viện QR; quy tắc dự án yêu cầu hỏi trước khi thêm dependency. Chủ repo chọn (14/11/2026): backend sinh PNG bằng `com.google.zxing:core` 3.5.4 (tự ghi PNG bằng `ImageIO`, không kéo module `javase` vào runtime; `javase` chỉ ở scope test để đọc ngược QR), API trả `Cache-Control: no-store`. STAFF quét bằng `BarcodeDetector` của trình duyệt (Chrome/Edge/Android) hoặc nhập/dán mã (máy quét USB/Bluetooth gõ như bàn phím). Phương án bị loại: thêm `qrcode` + `@zxing/browser` ở frontend (2 dependency), hoặc bỏ QR khỏi P5.

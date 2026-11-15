@@ -31,6 +31,17 @@ export interface OrderRefund {
   completedAt: string | null;
 }
 
+// P5 — vé đã phát hành; code chỉ trả cho chính buyer (nhập tay khi không quét được QR)
+export interface OrderTicket {
+  id: string;
+  ticketTypeId: string;
+  ticketName: string;
+  seatLabel: string | null;
+  code: string;
+  status: "VALID" | "CHECKED_IN" | "VOID";
+  checkedInAt: string | null;
+}
+
 export interface Order {
   id: string;
   eventId: string;
@@ -40,6 +51,7 @@ export interface Order {
   holdExpiresAt: string;
   paidAt: string | null;
   refund: OrderRefund | null;
+  tickets: OrderTicket[];
   items: OrderItem[];
 }
 
@@ -59,4 +71,14 @@ export interface RefundQuote {
   currency: "USD";
   paidAmount: number;
   eventStartAt: string | null;
+}
+
+// OR13 — kết quả quét vé; cũng là result của lỗi 4017 (đã check-in: ai quét, lúc nào)
+export interface CheckInResult {
+  ticketId: string;
+  orderId: string;
+  ticketName: string;
+  seatLabel: string | null;
+  checkedInAt: string;
+  checkedInBy: string;
 }

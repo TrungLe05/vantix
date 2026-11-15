@@ -6,6 +6,7 @@ import com.dev.commonlib_kafka.event.PaymentSucceededEvent;
 import com.dev.commonlib_kafka.event.RefundCompletedEvent;
 import com.dev.commonlib_kafka.event.RefundFailedEvent;
 import com.dev.commonlib_kafka.topic.KafkaTopics;
+import com.dev.order_service.service.BotFlagService;
 import com.dev.order_service.service.OrderCommandService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ public class OrderEventListener {
 
     private final JsonMapper jsonMapper;
     private final OrderCommandService orderCommandService;
+    private final BotFlagService botFlagService;
 
     // groupId cấu hình được để một stack test/E2E dùng chung cluster Kafka dev không tranh partition
     // với order-service dev (cùng group thì mỗi message chỉ một bên nhận)
@@ -63,6 +65,14 @@ public class OrderEventListener {
     public void onRefundFailed(String payload) {
         consume(KafkaTopics.REFUND_FAILED, () -> orderCommandService.handleRefundFailed(
                 jsonMapper.readValue(payload, RefundFailedEvent.class)));
+    }
+
+    // P6 — điểm rủi ro từ bot-detection; chỉ HIGH tạo flag (D41)
+    @KafkaListener(topics = KafkaTopics.BOT_SCORE_EVALUATED,
+            groupId = "${app.order.kafka-consumer-group:order-service}")
+    public void onBotScoreEvaluated(String payload) {
+        consume(KafkaTopics.BOT_SCORE_EVALUATED, () -> botFlagService.recordEvaluation(
+                jsonMapper.readValue(payload, BotScoreEvaluatedEvent.class)));
     }
 
     private void consume(String topic, Runnable handler) {

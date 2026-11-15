@@ -20,17 +20,14 @@ public class OrderEventPublisher {
     private final JdbcTemplate jdbcTemplate;
     private final JsonMapper jsonMapper;
 
+    // P6: cart.item_added chuyển sang payload JSON để mang thêm deviceHash/eventViewedAt (D38); bản ghi
+    // cũ dạng cột riêng vẫn được scheduler gửi như trước.
     public void recordCartItemAdded(CartItemAddedEvent event) {
-        jdbcTemplate.update(
-                "INSERT INTO order_event_outbox " +
-                        "(order_id, buyer_id, event_id, item_count, quantity, occurred_at) " +
-                        "VALUES (?, ?, ?, ?, ?, ?)",
-                event.orderId(), event.buyerId(), event.eventId(),
-                event.itemCount(), event.quantity(), Timestamp.from(event.occurredAt())
-        );
+        recordJson(KafkaTopics.ORDER_CART_ITEM_ADDED, event.orderId(), event.buyerId(), event.eventId(),
+                event.occurredAt(), event);
     }
 
-    // Event mới (P4) đi qua cột topic + payload JSON; cart.item_added giữ dạng cột riêng như cũ.
+    // Event P4+ đi qua cột topic + payload JSON.
     // Gọi trong transaction nghiệp vụ để yêu cầu hoàn và thay đổi trạng thái Order cùng commit.
     public void recordRefundRequested(RefundRequestedEvent event, UUID eventId) {
         recordJson(KafkaTopics.ORDER_REFUND_REQUESTED, event.orderId(), event.buyerId(), eventId,

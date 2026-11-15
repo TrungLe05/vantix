@@ -47,3 +47,6 @@ app:
     hold-duration: PT10M
     # Tổng vé (ghế + GA) tối đa mỗi Order, xem D24
     max-tickets-per-order: ${ORDER_MAX_TICKETS_PER_ORDER:10}
+    # P6 (D37): HMAC device ID. Trống → secret ngẫu nhiên mỗi lần chạy (WARN), chỉ dùng ở dev
+    device-hash-secret: ${DEVICE_HASH_SECRET:}
+    device-view-ttl: PT2H

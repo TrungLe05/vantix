@@ -26,6 +26,8 @@ import com.dev.order_service.entity.OrderItem;
 import com.dev.order_service.enums.OrderItemStatus;
 import com.dev.order_service.enums.OrderStatus;
 import com.dev.order_service.entity.TicketInventory;
+import com.dev.order_service.device.DeviceContext;
+import com.dev.order_service.device.DeviceViewTracker;
 import com.dev.order_service.event.CartItemAddedEvent;
 import com.dev.order_service.event.OrderEventPublisher;
 import com.dev.order_service.enums.OrderErrorCode;
@@ -77,6 +79,7 @@ public class OrderCommandService {
     private final CatalogValidationService catalogValidationService;
     private final OrderEventPublisher orderEventPublisher;
     private final StringRedisTemplate redisTemplate;
+    private final DeviceViewTracker deviceViewTracker;
     private final JdbcTemplate jdbcTemplate;
 
     @Value("${app.order.hold-duration:PT10M}")
@@ -857,8 +860,10 @@ public class OrderCommandService {
 
     private void publishAfterCommit(Order order, UUID buyerId, UUID eventId, List<OrderItemRequest> requests) {
         int quantity = requests.stream().mapToInt(OrderItemRequest::getQuantity).sum();
+        String deviceHash = DeviceContext.currentDeviceHash();
         CartItemAddedEvent event = new CartItemAddedEvent(
-                order.getId(), buyerId, eventId, requests.size(), quantity, Instant.now()
+                order.getId(), buyerId, eventId, requests.size(), quantity, Instant.now(),
+                deviceHash, deviceViewTracker.firstViewAt(deviceHash, eventId)
         );
         orderEventPublisher.recordCartItemAdded(event);
     }

@@ -92,3 +92,21 @@ def test_unknown_account_uses_imputation_in_end_to_end_evaluation(model_dir) -> 
     assert results[-1]["features"]["account_age_hours"] is None
     assert results[-1]["riskLevel"] == "HIGH"
     assert results[-1]["modelVersion"] == "iforest-test"
+
+
+def test_rule_flag_marks_bursts_and_shared_devices() -> None:
+    from app.features import rule_matched
+
+    calm = {"buyer_adds_1m": 1.0, "device_accounts_24h": 1.0, "has_device": 1.0}
+    assert not rule_matched(calm)
+    assert rule_matched({**calm, "buyer_adds_1m": 4.0})
+    assert rule_matched({**calm, "device_accounts_24h": 4.0})
+    # Không có thiết bị: số tài khoản/thiết bị không có nghĩa
+    assert not rule_matched({**calm, "device_accounts_24h": 9.0, "has_device": 0.0})
+
+    store = MemoryFeatureStore()
+    buyer, order = str(uuid.uuid4()), str(uuid.uuid4())
+    results = [asyncio.run(evaluate(cart_payload(buyerId=buyer, orderId=order, occurredAt=f"2026-11-15T10:00:0{i}Z"),
+                                    store, known_account, None)) for i in range(4)]
+    assert [r["ruleMatched"] for r in results] == [False, False, False, True]
+

@@ -24,6 +24,10 @@ Không thêm dependency. Thay đổi:
 - Không hiển thị deviceHash đầy đủ (8 ký tự đầu đủ để so khớp bằng mắt).
 - Trang ghi rõ điểm đến từ model huấn luyện trên dữ liệu tự tạo — ADMIN cần xem tín hiệu trước khi quyết định.
 
+## 3b. Cập nhật 15/11/2026 (D46)
+
+Bộ lọc thêm "Watching" (`WATCH`: HIGH đơn lẻ, chưa chặn). Flag WATCH mở được dialog review; nút đổi thành "Keep watching" / "Dismiss".
+
 ## 4. Kiểm tra
 
 - Đã chạy: `npx tsc --noEmit`, `npx eslint src` (0 lỗi; 1 warning cũ ở `provider.tsx`), `npm run build`.

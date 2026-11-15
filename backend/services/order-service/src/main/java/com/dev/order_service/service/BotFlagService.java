@@ -24,8 +24,9 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Phản ứng với điểm rủi ro của bot-detection (D41): chặn thêm giỏ theo buyer hoặc thiết bị, không đụng
+ * Phản ứng với điểm rủi ro của bot-detection (D41, D46): chặn thêm giỏ theo buyer hoặc thiết bị, không đụng
  * tới hold đang có. Chỉ {@code HIGH} tạo flag; mức khác (kể cả UNSCORED khi chưa có model, D42) bị bỏ qua.
+ * HIGH kèm luật tay → ACTIVE (chặn ngay); HIGH không kèm luật → WATCH, tới lần HIGH thứ hai mới ACTIVE.
  */
 @Service
 @RequiredArgsConstructor
@@ -50,7 +51,7 @@ public class BotFlagService {
     }
 
     /**
-     * Gộp vào dòng ACTIVE của buyer (giữ điểm cao nhất). Bản tin của lần thêm giỏ xảy ra trước lần ADMIN
+     * Gộp vào dòng đang mở (WATCH/ACTIVE) của buyer (giữ điểm cao nhất, D46: đã có dòng mở nghĩa là HIGH lần hai → ACTIVE). Bản tin của lần thêm giỏ xảy ra trước lần ADMIN
      * gỡ chặn gần nhất bị bỏ qua: Kafka phát lại không được khóa lại người vừa được gỡ.
      *
      * @return true nếu đã tạo/cập nhật flag
@@ -65,14 +66,16 @@ public class BotFlagService {
         String features = jsonMapper.writeValueAsString(event.features() == null ? Map.of() : event.features());
         String modelVersion = event.modelVersion() == null ? "unknown" : event.modelVersion();
         Timestamp at = Timestamp.from(flaggedAt);
+        String initialStatus = event.ruleMatchedOrFalse() ? "ACTIVE" : "WATCH";
         int changed = jdbcTemplate.update(
                 "INSERT INTO bot_flags (buyer_id, device_hash, order_id, event_id, score, model_version, features, " +
                         "status, hit_count, first_flagged_at, last_flagged_at) " +
-                        "SELECT ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, ?, ? " +
+                        "SELECT ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ? " +
                         "WHERE NOT EXISTS (SELECT 1 FROM bot_flags WHERE buyer_id = ? AND status = 'CLEARED' " +
                         "AND cleared_at >= ?) " +
-                        "ON CONFLICT (buyer_id) WHERE status = 'ACTIVE' DO UPDATE SET " +
+                        "ON CONFLICT (buyer_id) WHERE status IN ('WATCH', 'ACTIVE') DO UPDATE SET " +
                         "hit_count = bot_flags.hit_count + 1, " +
+                        "status = 'ACTIVE', " +
                         "last_flagged_at = GREATEST(bot_flags.last_flagged_at, EXCLUDED.last_flagged_at), " +
                         "device_hash = COALESCE(bot_flags.device_hash, EXCLUDED.device_hash), " +
                         "order_id = CASE WHEN EXCLUDED.score > bot_flags.score THEN EXCLUDED.order_id ELSE bot_flags.order_id END, " +
@@ -82,12 +85,12 @@ public class BotFlagService {
                         "score = GREATEST(bot_flags.score, EXCLUDED.score), " +
                         "updated_at = now()",
                 event.buyerId(), event.deviceHash(), event.orderId(), event.eventId(), event.anomalyScore(),
-                modelVersion, features, at, at, event.buyerId(), at
+                modelVersion, features, initialStatus, at, at, event.buyerId(), at
         );
         if (changed > 0) {
             // Không log deviceHash/feature: chỉ id nội bộ và điểm
-            log.info("BOT_FLAGGED buyerId={} orderId={} score={} model={}",
-                    event.buyerId(), event.orderId(), event.anomalyScore(), modelVersion);
+            log.info("BOT_FLAGGED buyerId={} orderId={} score={} model={} ruleMatched={}",
+                    event.buyerId(), event.orderId(), event.anomalyScore(), modelVersion, event.ruleMatchedOrFalse());
         }
         return changed > 0;
     }
@@ -112,7 +115,7 @@ public class BotFlagService {
     public BotFlagResponse clear(UUID adminId, UUID flagId) {
         BotFlag flag = botFlagRepository.findByIdForUpdate(flagId)
                 .orElseThrow(() -> new AppException(OrderErrorCode.BOT_FLAG_NOT_FOUND));
-        if (flag.getStatus() == BotFlagStatus.ACTIVE) {
+        if (flag.getStatus() != BotFlagStatus.CLEARED) {
             flag.setStatus(BotFlagStatus.CLEARED);
             flag.setClearedAt(Instant.now());
             flag.setClearedBy(adminId);

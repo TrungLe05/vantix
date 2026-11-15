@@ -18,6 +18,7 @@ import type { BotFlag, BotFlagStatus } from "@/types/bot-flags";
 
 const FILTERS: Array<{ value: BotFlagStatus | "ALL"; label: string }> = [
   { value: "ACTIVE", label: "Blocked" },
+  { value: "WATCH", label: "Watching" },
   { value: "CLEARED", label: "Cleared" },
   { value: "ALL", label: "All" },
 ];
@@ -76,9 +77,10 @@ export default function AdminBotFlagsPage() {
       <div>
         <h1 className="mt-1 font-heading text-3xl font-bold tracking-tight">Bot review</h1>
         <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-          Buyers and devices that bot detection scored as high risk. They cannot add more tickets until
-          you clear the flag; tickets they already hold are not affected. Scores come from a model trained
-          on generated traffic, so check the signals before deciding.
+          Buyers and devices that bot detection scored as high risk. Blocked buyers cannot add more
+          tickets until you clear the flag; tickets they already hold are not affected. A single high score
+          without a burst or shared-device signal is only watched, and becomes blocked if it happens again.
+          Scores come from a model trained on generated traffic, so check the signals before deciding.
         </p>
       </div>
 
@@ -176,7 +178,7 @@ export default function AdminBotFlagsPage() {
                     <td className="px-4 py-3 tabular-nums">{flag.hitCount}</td>
                     <td className="px-4 py-3 text-muted-foreground">{dateTime.format(new Date(flag.lastFlaggedAt))}</td>
                     <td className="px-4 py-3 text-right">
-                      {flag.status === "ACTIVE" ? (
+                      {flag.status !== "CLEARED" ? (
                         <Button
                           variant="outline"
                           size="sm"
@@ -185,7 +187,7 @@ export default function AdminBotFlagsPage() {
                             setSelected(flag);
                           }}
                         >
-                          Review
+                          {flag.status === "WATCH" ? "Review (watching)" : "Review"}
                         </Button>
                       ) : (
                         <span className="text-xs text-muted-foreground">
@@ -229,7 +231,10 @@ export default function AdminBotFlagsPage() {
             </DialogTitle>
             <DialogDescription>
               Buyer {shortId(selected?.buyerId ?? null)} · score {selected?.score.toFixed(3)} · model{" "}
-              {selected?.modelVersion}. Clearing lets this buyer and device add tickets again.
+              {selected?.modelVersion}.{" "}
+              {selected?.status === "WATCH"
+                ? "This buyer is not blocked yet; dismissing stops the watch."
+                : "Clearing lets this buyer and device add tickets again."}
             </DialogDescription>
           </DialogHeader>
           {selected ? (
@@ -249,14 +254,14 @@ export default function AdminBotFlagsPage() {
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => closeDialog(false)}>
-              Keep blocked
+              {selected?.status === "WATCH" ? "Keep watching" : "Keep blocked"}
             </Button>
             <Button
               onClick={() => selected && clearMutation.mutate(selected.id)}
               disabled={clearMutation.isPending}
             >
               {clearMutation.isPending ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : null}
-              Clear flag
+              {selected?.status === "WATCH" ? "Dismiss" : "Clear flag"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,5 +1,6 @@
 // src/types/bot-flags.ts
-export type BotFlagStatus = "ACTIVE" | "CLEARED";
+// WATCH (D46): HIGH đơn lẻ không kèm luật tay — chưa chặn, chờ review hoặc lần HIGH thứ hai
+export type BotFlagStatus = "WATCH" | "ACTIVE" | "CLEARED";
 
 export interface BotFlag {
   id: string;

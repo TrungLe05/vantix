@@ -17,6 +17,10 @@ const THINK_SCALE = Number(__ENV.THINK_SCALE || '1');
 
 const secrets = JSON.parse(open(`./.local/accounts_${ROUND}.json`));
 const EVENTS = JSON.parse(open(`./.local/events_${ROUND}.json`));
+// Mã riêng của mỗi lần dựng sự kiện: thiết bị "dùng chung" của hai lần chạy cùng vòng không được trùng nhau,
+// nếu không Redis của bot-detection đếm cả tài khoản của lần trước (cửa sổ 24 giờ) — lỗi đã làm sai số liệu
+// live vòng C (báo cáo P6 mục 4)
+const RUN_TAG = EVENTS[0].eventId.replace(/-/g, '').slice(0, 4);
 const byKind = (kind) => secrets.accounts.filter((a) => a.email.includes(`-${kind}-`));
 const ACCOUNTS = {
   human: byKind('human'),
@@ -108,7 +112,7 @@ function cancelCart(token, device, order) {
 function humanDevice(index) {
   if (index % 12 <= 1) {
     const family = String(Math.floor(index / 12)).padStart(4, '0');
-    return `00000000-0000-4000-9000-${ROUND === 'a' ? 'a' : ROUND === 'b' ? 'b' : 'c'}0000000${family}`;
+    return `00000000-0000-4000-9000-${RUN_TAG}0000${family}`;
   }
   return crypto.randomUUID();
 }
@@ -195,7 +199,7 @@ export function botFarm() {
   const index = exec.scenario.iterationInTest;
   const acc = account('botfarm');
   // Mỗi VU có bản sao biến toàn cục riêng: dùng UUID cố định theo vòng để các VU chung thiết bị thật sự
-  const device = `00000000-0000-4000-8000-0000000${ROUND === 'a' ? '1' : ROUND === 'b' ? '2' : '3'}000${index % 3}`;
+  const device = `00000000-0000-4000-8000-${RUN_TAG}0000000${index % 3}`;
   sleep(rand(0, 420) * THINK_SCALE);
   const token = login(acc);
   const event = pick(EVENTS);

@@ -42,6 +42,12 @@ spring:
           user-service:
             connectTimeout: 2000
             readTimeout: 3000
+# Không để health check mở kết nối SMTP mỗi lần gọi /actuator/health: SMTP lỗi không làm service DOWN
+# vì thông báo trong ứng dụng vẫn chạy và email đã có cơ chế retry riêng
+management:
+  health:
+    mail:
+      enabled: false
 app:
   user-service:
     base-url: ${USER_SERVICE_URL:http://localhost:9004/api}

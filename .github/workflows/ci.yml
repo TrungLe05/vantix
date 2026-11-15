@@ -31,6 +31,7 @@ jobs:
     outputs:
       backend: ${{ steps.result.outputs.backend }}
       frontend: ${{ steps.result.outputs.frontend }}
+      bot_detection: ${{ steps.result.outputs.bot_detection }}
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
@@ -47,6 +48,9 @@ jobs:
             frontend:
               - 'frontend/**'
               - '.github/workflows/ci.yml'
+            bot_detection:
+              - 'backend/services/bot-detection-service/**'
+              - '.github/workflows/ci.yml'
 
       # Chạy tay (workflow_dispatch) thì chạy tất cả
       - name: Tổng hợp kết quả
@@ -55,9 +59,11 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "backend=true" >> "$GITHUB_OUTPUT"
             echo "frontend=true" >> "$GITHUB_OUTPUT"
+            echo "bot_detection=true" >> "$GITHUB_OUTPUT"
           else
             echo "backend=${{ steps.filter.outputs.backend }}" >> "$GITHUB_OUTPUT"
             echo "frontend=${{ steps.filter.outputs.frontend }}" >> "$GITHUB_OUTPUT"
+            echo "bot_detection=${{ steps.filter.outputs.bot_detection }}" >> "$GITHUB_OUTPUT"
           fi
 
   # ---------------------------------------------------------------
@@ -192,6 +198,44 @@ jobs:
         run: npm run build
 
   # ---------------------------------------------------------------
+  # 4b. bot-detection (Python/FastAPI, ngoài Maven reactor)
+  # ---------------------------------------------------------------
+  bot-detection:
+    name: Bot detection - pytest
+    needs: changes
+    if: needs.changes.outputs.bot_detection == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend/services/bot-detection-service
+    # Test so khớp RedisFeatureStore với bản trong bộ nhớ cần Redis thật (DB 14)
+    services:
+      redis:
+        image: redis:alpine3.23
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12" # khớp Dockerfile
+          cache: pip
+          cache-dependency-path: backend/services/bot-detection-service/requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+  # ---------------------------------------------------------------
   # 5. Bảo mật: lộ secret + dependency có lỗ hổng
   # ---------------------------------------------------------------
   secret-scan:
@@ -236,7 +280,7 @@ jobs:
   ci-success:
     name: CI success
     if: always()
-    needs: [changes, commit-lint, backend, frontend, secret-scan, dependency-review]
+    needs: [changes, commit-lint, backend, frontend, bot-detection, secret-scan, dependency-review]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

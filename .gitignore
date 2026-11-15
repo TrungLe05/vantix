@@ -39,6 +39,13 @@ build/
 
 services/bot-detection-service/.venv
 services/assistant-service/.venv
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+# P6 datagen: mật khẩu tài khoản seed, log stack e2e, secret hash thiết bị của stack đó
+/backend/services/bot-detection-service/datagen/.local/
 # Local agent skills
 .agents/
 skills-lock.json

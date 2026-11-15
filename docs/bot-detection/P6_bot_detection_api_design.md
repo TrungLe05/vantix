@@ -27,7 +27,7 @@
 Trước khi gọi Product: buyer hoặc thiết bị có flag ACTIVE → `4019`. OR06 chỉ kiểm tra khi tăng số lượng (giảm vẫn được để buyer tự nhả vé). Hold đã có không bị đụng tới.
 
 ### OR14 — Danh sách flag (ADMIN)
-`GET /api/orders/bot-flags?status=ACTIVE&page=0&size=20` — `status` `ACTIVE` | `CLEARED` | bỏ trống (tất cả); mới nhất (`last_flagged_at`) trước; `size` 1–100.
+`GET /api/orders/bot-flags?status=ACTIVE&page=0&size=20` — `status` `ACTIVE` (đang chặn) | `WATCH` (HIGH đơn lẻ không kèm luật, chưa chặn — D46) | `CLEARED` | bỏ trống (tất cả); mới nhất (`last_flagged_at`) trước; `size` 1–100.
 
 ~~~json
 { "code": 200, "result": { "content": [ {
@@ -45,7 +45,7 @@ Trước khi gọi Product: buyer hoặc thiết bị có flag ACTIVE → `4019`
 | Topic | Producer → Consumer | Payload (key = orderId) |
 |---|---|---|
 | `cart.item_added` (P3, **bổ sung field**) | order → bot-detection | `orderId`, `buyerId`, `eventId`, `itemCount`, `quantity`, `occurredAt`, **`deviceHash`** (null được), **`eventViewedAt`** (null được) |
-| `bot_score.evaluated` (mới) | bot-detection → order | `evaluationId`, `orderId`, `buyerId`, `eventId`, `deviceHash`, `anomalyScore` (null khi UNSCORED), `riskLevel` (`LOW`\|`MEDIUM`\|`HIGH`\|`UNSCORED`), `modelVersion`, `features` (map tên → số), `occurredAt`, `evaluatedAt` |
+| `bot_score.evaluated` (mới) | bot-detection → order | `evaluationId`, `orderId`, `buyerId`, `eventId`, `deviceHash`, `anomalyScore` (null khi UNSCORED), `riskLevel` (`LOW`\|`MEDIUM`\|`HIGH`\|`UNSCORED`), `modelVersion`, `ruleMatched` (D46, luật tay đúng), `features` (map tên → số), `occurredAt`, `evaluatedAt` |
 
 `cart.item_added` từ nay đi qua cột `topic` + `payload` của `order_event_outbox` (như event P4/P5); bản ghi cũ dạng cột riêng vẫn được gửi như trước. Consumer group bot-detection: `bot-detection-service`. Order dùng group sẵn có `order-service`.
 

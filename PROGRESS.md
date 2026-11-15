@@ -76,6 +76,12 @@
 - Frontend: check-in dạng card + quét liên tục; dialog hoàn tiền báo đúng lý do; nhắc đăng nhập + quay lại sau khi đăng nhập; bảng sự kiện sắp theo nhóm; wizard sửa hạng vé tại chỗ; trang tạo STAFF; bản đồ Leaflet + Nominatim cho venue.
 - Test: order 95 (thêm 4), product 20 (thêm 2). Chưa kiểm tra UI trên trình duyệt.
 
+### Vòng làm task tự động (15/11/2026)
+
+- **BLOCKED — Chạy thật Stripe test mode** (và kéo theo **E2E Kafka/SMTP**, vì email "đặt vé" cần thanh toán Stripe). Đã xác nhận: Stripe CLI đăng nhập được, secret của `stripe listen` khớp `STRIPE_WEBHOOK_SECRET`, key là `sk_test_`. Vướng: cả stack dev của chủ repo đang chạy trên cổng 3000/8999/9000–9004 nên stack riêng (DB `*_e2e`) không khởi động được; dùng stack dev thì phải tạo tài khoản/đơn test trong DB dev đang dùng, webhook đi vào payment-service dev, Kafka dùng chung. **Câu hỏi:** chạy thử trên stack dev đang chạy (tạo một buyer test trong `users_service`, đơn test trong DB dev) được không, hay tắt stack dev để chạy stack riêng trên DB `*_e2e`?
+- **DONE — Giảm chặn nhầm bot-detection** (D46): đọc lại `bot_score.evaluated` vòng C từ Kafka và tái hiện offline → 11/12 feature khớp, riêng `device_accounts_24h` lệch do UUID thiết bị "gia đình"/"farm" của k6 trùng giữa lần chạy thử và lần chạy live (Redis giữ 24 giờ) → chặn nhầm thật ~1% chứ không phải 8%; "botfarm 4/24" là 20 tài khoản bị chặn theo thiết bị trước khi có bản tin. Sửa `datagen/traffic.js` (mã riêng mỗi lần chạy). Chính sách mới: HIGH kèm luật tay (`ruleMatched`) → chặn; HIGH đơn lẻ → `WATCH`, HIGH lần hai → chặn (order migration V6, bot-detection thêm `ruleMatched`, trang Bot review có bộ lọc Watching). Test B: người dùng bị chặn 7/200 → 0/200, bot 49/56 → 47/56. Script `training/evaluate_policy.py`. Test: order 97, pytest 18.
+- **Bước tiếp theo:** trả lời câu hỏi Stripe ở trên để mở hai task BLOCKED; còn lại theo thứ tự ưu tiên 🟠 trong `TASKS.md` (Playwright/kiểm tra trình duyệt, ESLint bỏ qua `.open-next`, …).
+
 ## Đồng bộ tài liệu (13/11/2026)
 
 Đã đối chiếu docs API với code và sửa các điểm lệch:

@@ -19,6 +19,7 @@
 | D39 | bot-detection giữ cửa sổ trượt trong Redis (sorted set theo thời điểm của event), tính feature theo `occurredAt` của bản tin; tuổi tài khoản lấy từ user-service `/internal/users/{id}/account` (role INTERNAL), cache 24 giờ | Cùng một code tính feature online và khi tái hiện dữ liệu offline; Kafka phát lại không đếm trùng (member = khóa của bản tin) |
 | D40 | Mô hình huấn luyện offline từ log k6, artifact (`joblib` + `model_meta.json`) commit vào repo; ngưỡng HIGH chọn trên tập validation với ràng buộc tỉ lệ người thật bị gắn HIGH ≤ 1% | Model nhỏ, tái lập được; ưu tiên ít phạt oan hơn bắt được mọi bot |
 | D41 | Order consume `bot_score.evaluated`; `HIGH` → `bot_flags` ACTIVE (một dòng ACTIVE/buyer). Thêm giỏ (OR01, OR04, OR06 tăng số lượng) bị chặn `4019` nếu buyer **hoặc** thiết bị có flag ACTIVE. ADMIN xem/gỡ (OR14, OR15) | Chặn theo cả hai vì bot đổi được thiết bị (D37) và dùng được nhiều tài khoản; gỡ flag giữ lịch sử |
+| D46 | (15/11/2026) HIGH kèm luật tay → chặn ngay; HIGH không kèm luật → `WATCH`, HIGH lần hai → chặn | Test B: chặn nhầm 7/200 → 0/200 tài khoản, đánh đổi bot lọt thêm ~1 lần thêm giỏ (báo cáo mục 6) |
 | D42 | Thiếu model (chưa huấn luyện) → bot-detection vẫn tính feature và phát `riskLevel = UNSCORED` | Dùng chính pipeline online để thu dữ liệu huấn luyện; Order bỏ qua mọi mức khác `HIGH` |
 
 D19 (OTP xác thực thiết bị) **vẫn mở**: P6 không cần "thiết bị tin cậy"; gỡ chặn do ADMIN làm tay.

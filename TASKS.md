@@ -49,7 +49,7 @@ Nhánh `feature/payment-service` (14/11/2026). Kiểm chứng: integration test 
 - [x] Refund: Order tính % theo 3 mốc, Payment gọi Refund API; hủy event → hoàn 100% (D29).
 - [x] OR08 backend chỉ còn nhận CART (việc treo từ D26).
 - [x] Frontend: nút thanh toán sau `PENDING_PAYMENT`, hộp thoại hoàn tiền, mục Purchases.
-- [ ] 🔴 Chạy thật với Stripe test mode (`stripe listen`, thẻ 4242) cho cả luồng thanh toán, hết hạn và hoàn tiền; ghi kết quả.
+- [ ] 🔴 **BLOCKED** (câu hỏi ở PROGRESS.md, 15/11/2026) Chạy thật với Stripe test mode (`stripe listen`, thẻ 4242) cho cả luồng thanh toán, hết hạn và hoàn tiền; ghi kết quả.
 - [ ] 🟠 E2E Playwright cho luồng thanh toán/hoàn (cần Stripe test mode hoặc stub webhook) và kiểm tra UI trên trình duyệt.
 - [ ] 🟠 Quyết định có cấp "cửa sổ thanh toán" riêng khi confirm sát deadline hay giữ nguyên (D27).
 - [ ] ⚪ Đơn 0 đồng (vé miễn phí); hoàn từng vé; API ADMIN xử lý refund `FAILED`; giới hạn vé theo buyer qua nhiều Order (D24).
@@ -63,7 +63,7 @@ Nhánh `feature/notification-checkin` (14/11/2026, tách từ `feature/payment-s
 - [x] Bảng `notifications`, API danh sách/đánh dấu đã đọc, WebSocket (ticket một lần).
 - [x] Order: phát hành vé/QR (`TICKETS_ISSUED`), API quét vé ADMIN/STAFF, chống quét trùng (trả ai quét, lúc nào).
 - [x] Frontend: vé + QR, chuông thông báo realtime, trang check-in.
-- [ ] 🔴 Chạy end-to-end: Kafka thật (vé → thông báo → WebSocket qua Gateway), SMTP thật (hoặc mail catcher) cho OTP/STAFF/đặt vé; ghi kết quả.
+- [ ] 🔴 **BLOCKED** (cùng câu hỏi với task Stripe ở PROGRESS.md) Chạy end-to-end: Kafka thật (vé → thông báo → WebSocket qua Gateway), SMTP thật (hoặc mail catcher) cho OTP/STAFF/đặt vé; ghi kết quả.
 - [ ] 🟠 Playwright cho vé/check-in/thông báo; thử camera `BarcodeDetector` trên điện thoại.
 - [ ] 🟠 Thêm `.open-next` vào ignore của ESLint (output build Cloudflare làm `npm run lint` báo hàng nghìn lỗi ở local).
 - [ ] ⚪ Thông báo cảnh báo bot (chờ P6), thông báo cho STAFF/ADMIN, tên sự kiện trong nội dung thông báo, chuyển nhượng vé (FR4 < 24 giờ).
@@ -84,7 +84,8 @@ Nhánh `feature/notification-checkin` (14/11/2026, tách từ `feature/payment-s
 - [x] bot-detection: feature theo cửa sổ Redis, tuổi tài khoản từ user-service (`/internal/users/{id}/account`), consumer/producer Kafka, BD01–BD03, pytest + job CI.
 - [x] k6 sinh dữ liệu (người dùng + 3 kiểu bot) trên stack e2e, huấn luyện Isolation Forest, notebook + báo cáo `P6_bot_detection_report.md`.
 - [x] Order: `bot_flags`, chặn 4019 theo buyer/thiết bị, OR14/OR15; frontend trang Bot review.
-- [ ] 🔴 Giảm chặn nhầm (offline 3.5%, live 8% tài khoản người dùng mô phỏng) và tìm nguyên nhân live tệ hơn offline: kết hợp luật tay, ngưỡng theo nhiều lần HIGH; thu traffic người dùng thật để đo lại.
+- [x] 🔴 **DONE** (15/11/2026) Giảm chặn nhầm: live 8% hóa ra do UUID thiết bị trùng giữa hai lần chạy k6 (đã sửa datagen); chặn khi HIGH kèm luật tay hoặc HIGH lần hai (D46) — test B chặn nhầm 7/200 → 0/200 tài khoản.
+- [ ] 🟠 Thu traffic người dùng thật (thao tác tay) để đo lại tỉ lệ chặn nhầm của D46.
 - [ ] 🟠 Playwright cho trang Bot review và thông báo 4019; kiểm tra trên trình duyệt.
 - [ ] ⚪ Thông báo cho ADMIN khi có flag mới; dashboard tỉ lệ HIGH (P9).
 - [ ] ⚪ Quyết định D19 (OTP xác thực thiết bị) — P6 không cần, vẫn mở.

@@ -48,6 +48,7 @@
 | D42 | Thiếu model → bot-detection vẫn tính feature, phát `UNSCORED`; Order chỉ phản ứng với HIGH | Chốt (P6) |
 | D43 | Buyer hủy đơn có vé đã check-in: hoàn theo mốc thời gian cho **vé chưa dùng**, vé đã dùng không hoàn và không nhả kho; quote trả lý do | Chốt (chủ repo chọn 15/11/2026); bổ sung D29 |
 | D44 | Check-in chỉ mở từ 3 giờ trước giờ bắt đầu tới giờ kết thúc sự kiện (4021) | Chốt (chủ repo chọn 15/11/2026) |
+| D46 | Chặn khi HIGH kèm luật tay hoặc HIGH lần hai; HIGH đơn lẻ → `WATCH` (không chặn) | Chốt (15/11/2026); thay một phần D41 |
 | D45 | Venue mới bắt buộc tọa độ, chọn từ kết quả tìm địa chỉ OpenStreetMap (Nominatim + Leaflet) | Chốt (chủ repo chọn 15/11/2026) |
 
 ---
@@ -199,3 +200,7 @@ Trước đây STAFF quét được bất cứ lúc nào — vé có thể bị 
 
 ### D45 — Tọa độ venue từ OpenStreetMap
 Địa chỉ venue gõ tay có thể không tồn tại. Chủ repo chọn OpenStreetMap: Leaflet hiển thị bản đồ, Nominatim tìm địa chỉ (chỉ khi bấm tìm, tối đa 5 kết quả — theo chính sách sử dụng của Nominatim, không autocomplete), không cần API key. ADMIN phải chọn một kết quả; frontend điền địa chỉ/thành phố và gửi `latitude`/`longitude`. Backend bắt buộc tọa độ hợp lệ với venue mới (migration `V5__venue_coordinates.sql`, venue cũ giữ NULL), lưu làm tròn 6 chữ số. Backend **không** tự gọi Nominatim để kiểm lại (thêm phụ thuộc mạng ra ngoài cho product-service) — tọa độ chứng minh địa chỉ đã được chọn từ dữ liệu bản đồ, không chống được ADMIN cố ý gửi tọa độ giả qua API. Đánh đổi: thêm dependency `leaflet` ở frontend; tile và tìm kiếm phụ thuộc máy chủ công cộng của OSM (giới hạn ~1 request/giây, đủ cho thao tác của ADMIN).
+
+### D46 — Chặn khi HIGH có thêm bằng chứng
+Báo cáo P6: chặn ngay ở lần HIGH đầu (D41) làm 7/200 tài khoản người dùng mô phỏng ở tập test bị chặn nhầm. (Con số 8% của lần chạy live hóa ra do UUID thiết bị trùng giữa hai lần chạy k6 — xem báo cáo mục 4.) Cân nhắc trên tập A/B (thu khi chưa chặn ai): (a) chỉ luật tay — không chặn nhầm nhưng mất phần model bắt thêm; (b) cần ≥ 2 HIGH — bỏ sót bot chỉ thêm giỏ 1–2 lần (botfarm 7/24); (c) HIGH **và** luật tay, hoặc HIGH lần hai — chọn (c): test B 0/200 người dùng bị chặn, bot 47/56 (D41: 49/56 + 7 người dùng). bot-detection gửi thêm `ruleMatched` (`buyer_adds_1m ≥ 4` hoặc `device_accounts_24h ≥ 4` khi có thiết bị); Order: HIGH kèm luật → `ACTIVE`; không kèm → `WATCH` (ADMIN thấy, không chặn); đã có dòng mở mà gặp HIGH nữa → `ACTIVE`. Một dòng mở (WATCH/ACTIVE) mỗi buyer (migration V6). Bản tin cũ không có `ruleMatched` coi là `false`. Đánh đổi: bot lọt thêm khoảng 1 lần thêm giỏ trước khi bị chặn.
+

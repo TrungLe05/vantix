@@ -49,21 +49,32 @@ Stack e2e chạy lại với model đã nạp (`/health`: `modelLoaded=true`). k
 | Lần thêm giỏ thành công / bị chặn 4019 / lỗi khác | 348 / 133 / 1 |
 | botfast bị flag | 18/18 |
 | botviewer bị flag | 14/14 |
-| botfarm bị flag | **4/24** |
-| Người dùng bị flag (chặn nhầm) | **16/200 (8%)** |
+| botfarm bị flag | 4/24 có bản tin — xem dưới |
+| Người dùng bị flag | 16/200 — xem dưới |
 
-**Live tệ hơn offline** ở hai điểm: chặn nhầm người dùng 8% (offline 3.5%), và botfarm chỉ bị bắt 4/24 (offline 17/24). Nguyên nhân chưa xác minh. Giả thuyết, chưa kiểm chứng:
-- Khi chặn thật, bot bị chặn sớm nên các lần thêm giỏ sau không xảy ra, làm phân bố feature khác dữ liệu offline (vốn không bị chặn).
-- Redis của bot-detection giữ cửa sổ từ các vòng trước.
-- Ngưỡng chọn trên validation nhỏ.
+**Phân tích lại (15/11/2026)** — đọc lại 348 bản tin `bot_score.evaluated` của vòng C từ Kafka và tái hiện offline đúng các bản tin đó bằng cùng code feature + cùng model:
 
-Với tỉ lệ chặn nhầm này, **chưa nên bật chặn tự động ngoài môi trường demo**. Xem mục 5.
+- 11/12 feature trùng khớp tuyệt đối giữa live và offline. Riêng `device_accounts_24h` lệch ở 41 bản tin (37 của người dùng): người dùng bị flag live đều có giá trị ≈ 4. Nguyên nhân là **lỗi của dữ liệu thử nghiệm**, không phải của model: k6 dùng UUID thiết bị "gia đình" cố định theo tên vòng (`c`), nên lần chạy thử nhanh vòng C trước đó và lần chạy live dùng chung thiết bị; Redis của bot-detection còn giữ tài khoản của lần trước trong cửa sổ 24 giờ. Chấm lại sạch: **2/199 người dùng (1%)** bị flag, không phải 16/199. Đã sửa `datagen/traffic.js` (thiết bị dùng chung thêm mã riêng theo lần dựng sự kiện).
+- "botfarm 4/24" là đọc sai: chỉ 4 tài khoản botfarm có bản tin thêm giỏ; 20 tài khoản còn lại bị **chặn 4019 theo thiết bị** ngay từ lần đầu (thiết bị đã bị flag), nên không sinh bản tin nào — thực tế cả 24 tài khoản bị chặn.
+- Kết luận cũ "live tệ hơn offline" vì vậy không đúng; tỉ lệ chặn nhầm thật vẫn ~1–3.5% tài khoản (C sạch / test B), và đã giảm bằng D46 (mục 6).
 
 ## 5. Việc nên làm tiếp
-
-- Điều tra chênh lệch live/offline: xuất `bot_score.evaluated` của vòng C, so phân bố feature với vòng B.
 
 - Thu traffic người dùng thật (thao tác tay) thay cho kịch bản; đo lại tỉ lệ chặn nhầm.
 - Kết hợp luật tay và model; cân nhắc chỉ chặn khi HIGH lặp lại, hoặc MEDIUM kèm luật tay, để giảm chặn nhầm.
 - Thông báo cho ADMIN khi có flag mới (Notification, TASKS P5).
 - Theo dõi drift: tỉ lệ HIGH theo giờ và theo sự kiện (P9 observability).
+
+## 6. Giảm chặn nhầm: HIGH kèm luật hoặc HIGH lặp lại (D46)
+
+Chính sách mới ở Order: HIGH **kèm luật tay** (`buyer_adds_1m ≥ 4` hoặc `≥ 4` tài khoản/thiết bị/24 giờ — bot-detection gửi `ruleMatched`) → chặn ngay; HIGH **không kèm luật** → `WATCH` (ADMIN thấy, chưa chặn), lần HIGH thứ hai của cùng tài khoản → chặn. Số liệu theo tài khoản (`training/evaluate_policy.py`, `training/reports/policy.json`):
+
+| Tập | Chính sách | Người dùng bị chặn | botfast | botviewer | botfarm | Số lần thêm lọt trước khi chặn (bot, trung vị) |
+|---|---|---:|---:|---:|---:|---|
+| Test B | D41 (HIGH đầu tiên) | 7/200 | 18/18 | 14/14 | 17/24 | 0–1 |
+| Test B | **D46** | **0/200** | 18/18 | 14/14 | 15/24 | 0–2 |
+| Validation A | D41 | 1/50 | 4/4 | 4/4 | 6/6 | |
+| Validation A | **D46** | **0/50** | 4/4 | 4/4 | 5/6 | |
+
+Đánh đổi: bot lọt thêm khoảng 1 lần thêm giỏ trước khi bị chặn (vẫn trong giới hạn 10 vé/Order), và bỏ sót thêm 2/24 tài khoản botfarm khi tính riêng từng tài khoản (khi chặn theo thiết bị, các tài khoản cùng thiết bị vẫn bị chặn dây chuyền). Vòng C thu khi đang chặn theo D41 (bot dừng sau HIGH đầu, không có HIGH thứ hai) nên không dùng để đo phía bot của D46. Luật tay và ngưỡng (4) lấy từ phép so sánh ở mục 2 trước khi đo, không tối ưu trên test B; vẫn là dữ liệu tự tạo — cần đo lại khi có traffic thật.
+

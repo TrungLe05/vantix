@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { createVenue, getVenues } from "@/lib/api/venues";
 import { getErrorMessage } from "@/lib/api/client";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { LocationPicker, type PickedLocation } from "@/components/venues/LocationPicker";
 
 const venueSchema = z.object({
   name: z
@@ -37,6 +38,9 @@ const venueSchema = z.object({
     .trim()
     .min(1, "Enter a city.")
     .max(100, "City must be 100 characters or fewer."),
+  // Bắt buộc chọn từ kết quả tìm địa chỉ (D45); backend cũng bắt buộc tọa độ
+  latitude: z.number({ message: "Search and pick the address on the map." }).min(-90).max(90),
+  longitude: z.number({ message: "Search and pick the address on the map." }).min(-180).max(180),
 });
 
 type VenueFormValues = z.infer<typeof venueSchema>;
@@ -50,20 +54,23 @@ export default function AdminVenuesPage() {
     queryKey: ["admin", "venues"],
     queryFn: getVenues,
   });
+  const [location, setLocation] = useState<PickedLocation | null>(null);
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<VenueFormValues>({
     resolver: zodResolver(venueSchema),
-    defaultValues: { name: "", address: "", city: "" },
+    defaultValues: { name: "", address: "", city: "", latitude: undefined, longitude: undefined },
   });
   const createMutation = useMutation({
     mutationFn: createVenue,
     onSuccess: async (venue) => {
       await queryClient.invalidateQueries({ queryKey: ["admin", "venues"] });
       setDialogOpen(false);
+      setLocation(null);
       reset();
       setSuccessMessage(`Venue “${venue.name}” created.`);
     },
@@ -81,6 +88,7 @@ export default function AdminVenuesPage() {
   function closeDialog(open: boolean) {
     setDialogOpen(open);
     if (!open) {
+      setLocation(null);
       reset();
       createMutation.reset();
     }
@@ -216,7 +224,7 @@ export default function AdminVenuesPage() {
                     City
                   </th>
                   <th scope="col" className="px-5 py-3 font-semibold">
-                    Neighborhood / events
+                    Map
                   </th>
                   <th
                     scope="col"
@@ -246,7 +254,18 @@ export default function AdminVenuesPage() {
                       {venue.city}
                     </td>
                     <td className="px-5 py-4 text-xs text-muted-foreground">
-                      Not available in API
+                      {venue.latitude !== null && venue.longitude !== null ? (
+                        <a
+                          href={`https://www.openstreetmap.org/?mlat=${venue.latitude}&mlon=${venue.longitude}#map=17/${venue.latitude}/${venue.longitude}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary underline-offset-2 hover:underline"
+                        >
+                          View on map
+                        </a>
+                      ) : (
+                        "No location"
+                      )}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end">
@@ -289,6 +308,24 @@ export default function AdminVenuesPage() {
                 {getErrorMessage(createMutation.error)}
               </p>
             ) : null}
+            <div className="space-y-2">
+              <span className="text-sm font-medium">Location</span>
+              <LocationPicker
+                value={location}
+                onChange={(picked) => {
+                  setLocation(picked);
+                  setValue("latitude", picked.latitude, { shouldValidate: true });
+                  setValue("longitude", picked.longitude, { shouldValidate: true });
+                  setValue("address", picked.address, { shouldValidate: true });
+                  setValue("city", picked.city, { shouldValidate: true });
+                }}
+              />
+              {errors.latitude || errors.longitude ? (
+                <p className="text-sm text-destructive">
+                  {errors.latitude?.message ?? errors.longitude?.message}
+                </p>
+              ) : null}
+            </div>
             <div className="space-y-2">
               <Label htmlFor="venue-name">Venue name</Label>
               <Input

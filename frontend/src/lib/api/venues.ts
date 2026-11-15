@@ -6,12 +6,17 @@ export interface Venue {
   name: string;
   address: string;
   city: string;
+  // D45: null với venue tạo trước khi bắt buộc tọa độ
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface CreateVenueRequest {
   name: string;
   address: string;
   city: string;
+  latitude: number;
+  longitude: number;
 }
 
 export async function getVenues() {
